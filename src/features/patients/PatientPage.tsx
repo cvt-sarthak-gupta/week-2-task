@@ -50,7 +50,7 @@ export default function PatientPage() {
   const [updateTick, setUpdateTick] = useState(0);
   const [connStatus, setConnStatus] = useState<ConnectionStatus>(connectionManager.status);
 
-  const { filters, setFilter, setFilterAst, parsedFilterAst, clearFilters, hasActiveFilters } = usePatientFilters();
+  const { filters, setFilter, setSort, setFilterAst, parsedFilterAst, clearFilters, hasActiveFilters } = usePatientFilters();
   const canShare = useCan('sharePresets');
   const userId = user?.id ?? '';
   const { data: presets = [] } = usePresets(tenantId, userId);
@@ -102,8 +102,8 @@ export default function PatientPage() {
 
   const handleSort = useCallback((field: string) => {
     const next = toggleSort(sortState, field);
-    setFilter('sort', sortStateToParam(next));
-  }, [sortState, setFilter]);
+    setSort(sortStateToParam(next));
+  }, [sortState, setSort]);
 
   const handleNearBottom = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
