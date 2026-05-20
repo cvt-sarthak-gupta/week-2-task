@@ -1,5 +1,7 @@
 import { apiFetch } from '@/core/api/client';
+import { getAccessToken } from '@/core/api/tokens';
 import { offlineStatusManager } from './status';
+import { streamBootstrap } from './streamBootstrap';
 import { computeDiff, applyDiff } from './diff';
 import type { Patient } from '@/shared/types';
 import type { QueueEntry, ConflictMeta } from '../queue/types';
@@ -36,7 +38,15 @@ export async function runSync(deps: SyncDependencies): Promise<SyncResult> {
 
   try {
     const since = deps.getLastSyncAt();
-    const serverPatients = await apiFetch<Patient[]>(`/patients?since=${since}&tenantId=${deps.tenantId}`);
+    const token = getAccessToken();
+    const serverPatients: Patient[] = [];
+    await streamBootstrap({
+      url: `/api/patients/stream?since=${since}`,
+      ...(token && { headers: { Authorization: `Bearer ${token}` } }),
+      batchSize: 500,
+      onBatch: (batch) => { serverPatients.push(...batch); },
+      onCheckpoint: () => {},
+    });
 
     const local = deps.getLocalPatients();
     const diff = computeDiff(local, serverPatients);

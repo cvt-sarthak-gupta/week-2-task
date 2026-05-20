@@ -54,9 +54,16 @@ export class PatientController extends BaseController {
     } catch (e) { this.handleError(e, res); }
   }
 
-  async stream(_req: Request, res: Response): Promise<void> {
+  async stream(req: Request, res: Response): Promise<void> {
     try {
-      const patients = await this.service.findAllForStream();
+      let patients;
+      if (req.query['since'] !== undefined) {
+        const since = parseInt(String(req.query['since']), 10);
+        if (isNaN(since)) { res.status(400).json({ status: 'error', message: 'since must be a number' }); return; }
+        patients = await this.service.findSince(since);
+      } else {
+        patients = await this.service.findAllForStream();
+      }
       res.setHeader('Content-Type', 'application/x-ndjson');
       res.setHeader('Cache-Control', 'no-cache');
       for (const patient of patients) {

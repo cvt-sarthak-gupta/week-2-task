@@ -36,24 +36,45 @@ function makeDeps(overrides: Partial<SyncDependencies> = {}): SyncDependencies {
   };
 }
 
-// Mock the API fetch used by the orchestrator
 vi.mock('@/core/api/client', () => ({
   apiFetch: vi.fn(),
 }));
 
+vi.mock('./streamBootstrap', () => ({
+  streamBootstrap: vi.fn(),
+}));
+
 import { apiFetch } from '@/core/api/client';
+import { streamBootstrap } from './streamBootstrap';
 const mockApiFetch = vi.mocked(apiFetch);
+const mockStreamBootstrap = vi.mocked(streamBootstrap);
+
+function mockStream(patients: Patient[]): void {
+  mockStreamBootstrap.mockImplementationOnce(async (opts) => {
+    opts.onBatch(patients, { received: patients.length, batchIndex: 0 });
+    opts.onCheckpoint(Date.now());
+    return patients.length;
+  });
+}
+
+function defaultStream(): void {
+  mockStreamBootstrap.mockImplementation(async (opts) => {
+    opts.onBatch([], { received: 0, batchIndex: 0 });
+    opts.onCheckpoint(0);
+    return 0;
+  });
+}
 
 describe('runSync — patient diff merge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Access internal sync lock reset via module-level variable — re-import resets it
+    defaultStream();
   });
   afterEach(() => { vi.clearAllMocks(); });
 
   it('calls onPatientsUpdated with merged result', async () => {
     const serverPatients = [makePatient({ version: 2, status: 'critical' })];
-    mockApiFetch.mockResolvedValueOnce(serverPatients);
+    mockStream(serverPatients);
 
     const onPatientsUpdated = vi.fn();
     const deps = makeDeps({
@@ -71,7 +92,7 @@ describe('runSync — patient diff merge', () => {
 
   it('adds new patients from server that do not exist locally', async () => {
     const newPatient = makePatient({ id: 'p-new' });
-    mockApiFetch.mockResolvedValueOnce([newPatient]);
+    mockStream([newPatient]);
 
     const onPatientsUpdated = vi.fn();
     const deps = makeDeps({ getLocalPatients: () => [], onPatientsUpdated });
@@ -83,7 +104,6 @@ describe('runSync — patient diff merge', () => {
   });
 
   it('updates setLastSyncAt after success', async () => {
-    mockApiFetch.mockResolvedValueOnce([]);
     const setLastSyncAt = vi.fn();
     await runSync(makeDeps({ setLastSyncAt }));
     expect(setLastSyncAt).toHaveBeenCalledOnce();
@@ -92,7 +112,7 @@ describe('runSync — patient diff merge', () => {
 });
 
 describe('runSync — queue replay ordering', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => { vi.clearAllMocks(); defaultStream(); });
   afterEach(() => { vi.clearAllMocks(); });
 
   it('replays queue entries in createdAt order', async () => {
@@ -103,13 +123,10 @@ describe('runSync — queue replay ordering', () => {
       makeEntry({ id: 'qe-2', createdAt: 200 }),
     ];
 
-    mockApiFetch
-      .mockResolvedValueOnce([]) // getPatients call
-      .mockImplementation((url: string) => {
-        // Extract which entry this is by checking which onEntrySynced call we're on
-        callOrder.push(url as string);
-        return Promise.resolve({});
-      });
+    mockApiFetch.mockImplementation((url: string) => {
+      callOrder.push(url as string);
+      return Promise.resolve({});
+    });
 
     const onEntrySynced = vi.fn();
     await runSync(makeDeps({
@@ -121,9 +138,7 @@ describe('runSync — queue replay ordering', () => {
   });
 
   it('marks entries synced on success', async () => {
-    mockApiFetch
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce({});
+    mockApiFetch.mockResolvedValueOnce({});
 
     const onEntrySynced = vi.fn();
     const deps = makeDeps({ getPendingQueue: () => [makeEntry()], onEntrySynced });
@@ -133,16 +148,14 @@ describe('runSync — queue replay ordering', () => {
 });
 
 describe('runSync — conflict detection', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => { vi.clearAllMocks(); defaultStream(); });
   afterEach(() => { vi.clearAllMocks(); });
 
   it('calls onEntryConflict and returns conflict in result on 409', async () => {
     const conflictBody = { serverVersion: 5, serverPayload: { status: 'stable' } };
     const conflictError = Object.assign(new Error('Conflict'), { status: 409, body: conflictBody });
 
-    mockApiFetch
-      .mockResolvedValueOnce([]) // patients fetch
-      .mockRejectedValueOnce(conflictError); // queue replay
+    mockApiFetch.mockRejectedValueOnce(conflictError);
 
     const onEntryConflict = vi.fn();
     const entry = makeEntry();
@@ -162,9 +175,7 @@ describe('runSync — conflict detection', () => {
 
   it('does NOT call onEntryConflict for non-409 errors', async () => {
     const networkError = Object.assign(new Error('Network error'), { status: 500 });
-    mockApiFetch
-      .mockResolvedValueOnce([])
-      .mockRejectedValueOnce(networkError);
+    mockApiFetch.mockRejectedValueOnce(networkError);
 
     const onEntryConflict = vi.fn();
     const deps = makeDeps({ getPendingQueue: () => [makeEntry()], onEntryConflict });
@@ -181,7 +192,6 @@ describe('runSync — conflict detection', () => {
     });
 
     mockApiFetch
-      .mockResolvedValueOnce([]) // patients
       .mockRejectedValueOnce(conflictError) // qe-1 conflicts
       .mockResolvedValueOnce({}); // qe-2 syncs
 
@@ -196,11 +206,19 @@ describe('runSync — conflict detection', () => {
 });
 
 describe('runSync — concurrency guard', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+  afterEach(() => { vi.clearAllMocks(); });
+
   it('returns empty result when a sync is already in progress', async () => {
     let resolveFirst!: () => void;
     const firstSyncDone = new Promise<void>((res) => { resolveFirst = res; });
 
-    mockApiFetch.mockImplementationOnce(() => firstSyncDone.then(() => []));
+    mockStreamBootstrap.mockImplementationOnce(async (opts) => {
+      await firstSyncDone;
+      opts.onBatch([], { received: 0, batchIndex: 0 });
+      opts.onCheckpoint(0);
+      return 0;
+    });
 
     const first = runSync(makeDeps());
     // Second sync fires while first is still in progress
