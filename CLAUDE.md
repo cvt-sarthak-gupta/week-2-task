@@ -67,6 +67,9 @@ npm run dev          # starts Vite (port 5173) + Express (port 3001)
 
 ## Architecture Decisions
 
+### Token storage strategy
+Access tokens live **only in JavaScript memory** (`tokens.ts` module variable) — never in `sessionStorage` or `localStorage`. This eliminates the XSS window: an injected script cannot exfiltrate the token via Web Storage. Persistence across page loads is handled by the httpOnly `refresh_token` cookie. On mount, `AuthContext` silently calls `/auth/refresh` to re-issue the token from the cookie before rendering anything protected.
+
 ### Why custom virtualized grid? (ADR-0001)
 `react-window` and `tanstack-virtual` do not support variable-height rows with a ResizeObserver out of the box. Built from scratch using a **Fenwick tree** for O(log n) cumulative height queries. See `docs/ADR-0001-virtualized-table.md`.
 

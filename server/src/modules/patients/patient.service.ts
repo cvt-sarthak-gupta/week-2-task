@@ -5,6 +5,11 @@ import { NotFoundError, ConflictError } from '../../core/errors/index';
 import { deserializeFilter } from '../../core/filter/filter-deserializer';
 import { evaluateFilter } from '../../core/filter/filter-evaluator';
 
+// Hard cap on the number of records loaded into memory for in-process AST filtering
+// and unbounded exports. Prevents accidental OOM on unexpectedly large datasets.
+// A real DB-backed implementation would replace this with cursor-based streaming.
+const IN_MEMORY_RECORD_CAP = 100_000;
+
 export interface UpdatePatientDto {
   status?: PatientEntity['status'];
   notes?: string;
@@ -89,7 +94,7 @@ export class PatientService {
       return { data: [], total: 0, page, limit, totalPages: 0 };
     }
 
-    const items = await this.repo.findAll({ page: 1, limit: Number.MAX_SAFE_INTEGER });
+    const items = await this.repo.findAll({ page: 1, limit: IN_MEMORY_RECORD_CAP });
     let matched = items.data.filter((p) => evaluateFilter(ast, p as unknown as Record<string, unknown>));
 
     if (filters.sort) {
@@ -119,7 +124,7 @@ export class PatientService {
       } catch {
         return [];
       }
-      const items = await this.repo.findAll({ page: 1, limit: Number.MAX_SAFE_INTEGER });
+      const items = await this.repo.findAll({ page: 1, limit: IN_MEMORY_RECORD_CAP });
       let matched = items.data.filter((p) => evaluateFilter(ast, p as unknown as Record<string, unknown>));
       if (filters.sort) {
         matched = this.applySortParts(matched as unknown as Record<string, unknown>[], this.parseSortParts(filters.sort)) as unknown as PatientEntity[];
@@ -143,7 +148,7 @@ export class PatientService {
 
     const result = await this.repo.findAll({
       page: 1,
-      limit: Number.MAX_SAFE_INTEGER,
+      limit: IN_MEMORY_RECORD_CAP,
       ...(Object.keys(where).length > 0 && { where }),
       order,
       ...(search && { search }),
@@ -154,7 +159,7 @@ export class PatientService {
   async findAllForStream(): Promise<PatientEntity[]> {
     const result = await this.repo.findAll({
       page: 1,
-      limit: Number.MAX_SAFE_INTEGER,
+      limit: IN_MEMORY_RECORD_CAP,
       order: { updatedAt: 'DESC' },
     });
     return result.data;
