@@ -23,6 +23,7 @@ export function serialize(node: FilterNode): string {
       return `${node.op}(${node.field},${encodeTypedValue(node.value)})`;
     case 'range':
       return `range(${node.field},${encodeTypedValue(node.min)},${encodeTypedValue(node.max)},${node.inclusive[0] ? '1' : '0'}${node.inclusive[1] ? '1' : '0'})`;
+    /* v8 ignore next 2 */
     default:
       return exhaustiveCheck(node);
   }
@@ -30,10 +31,6 @@ export function serialize(node: FilterNode): string {
 
 function escapeStr(s: string): string {
   return s.replace(/[(),\\]/g, (c) => `\\${c}`);
-}
-
-function unescapeStr(s: string): string {
-  return s.replace(/\\([(),\\])/g, '$1');
 }
 
 function encodeTypedValue(v: string | number | boolean): string {
@@ -50,11 +47,6 @@ function decodeTypedValue(raw: string): string | number | boolean {
   if (raw.startsWith('s:')) return raw.slice(2);
   // Legacy fallback for values without type prefix
   return raw === 'true' ? true : raw === 'false' ? false : (raw.trim() !== '' && !isNaN(Number(raw))) ? Number(raw) : raw;
-}
-
-/** @deprecated — internal tokenizer use only */
-function decodeToken(s: string): string | number | boolean {
-  return decodeTypedValue(s);
 }
 
 type Token = { type: 'lparen' } | { type: 'rparen' } | { type: 'comma' } | { type: 'ident'; value: string };

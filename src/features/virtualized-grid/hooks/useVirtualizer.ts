@@ -94,7 +94,15 @@ export function useVirtualizer({ count, defaultRowHeight = 48, overscan = 3 }: V
       if (!el || !sizeManagerRef.current) return;
       const height = el.getBoundingClientRect().height;
       if (height > 0 && height !== sizeManagerRef.current.getSize(index)) {
+        const container = containerRef.current;
+        const prevOffset = sizeManagerRef.current.getOffset(index);
+        const delta = height - sizeManagerRef.current.getSize(index);
         sizeManagerRef.current.setSize(index, height);
+        // If the resized row is above the current scroll position, shift scrollTop
+        // by the same delta so the visible content doesn't jump.
+        if (container && prevOffset < container.scrollTop) {
+          container.scrollTop += delta;
+        }
         scheduleRecompute();
       }
     },

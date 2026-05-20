@@ -28,14 +28,14 @@ describe('QueueRepository', () => {
       repo.enqueue(makeEntry());
       const pending = repo.getPending('t-1');
       expect(pending).toHaveLength(1);
-      expect(pending[0].status).toBe('pending');
-      expect(pending[0].retries).toBe(0);
+      expect(pending[0]!.status).toBe('pending');
+      expect(pending[0]!.retries).toBe(0);
     });
 
     it('preserves payload round-trip', () => {
       const payload = { status: 'critical', notes: 'hello' };
       repo.enqueue(makeEntry({ payload }));
-      expect(repo.getPending('t-1')[0].payload).toEqual(payload);
+      expect(repo.getPending('t-1')[0]!.payload).toEqual(payload);
     });
   });
 
@@ -55,7 +55,7 @@ describe('QueueRepository', () => {
       repo.markSynced('qe-1');
       const pending = repo.getPending('t-1');
       expect(pending).toHaveLength(1);
-      expect(pending[0].id).toBe('qe-2');
+      expect(pending[0]!.id).toBe('qe-2');
     });
 
     it('excludes conflict entries', () => {
@@ -99,7 +99,7 @@ describe('QueueRepository', () => {
       repo.enqueue(makeEntry());
       repo.incrementRetries('qe-1');
       repo.incrementRetries('qe-1');
-      const [entry] = repo.getPending('t-1');
+      const entry = repo.getPending('t-1')[0]!;
       expect(entry.retries).toBe(2);
     });
   });
@@ -121,6 +121,28 @@ describe('QueueRepository', () => {
       repo.enqueue(makeEntry({ id: 'qe-2' }));
       repo.markSynced('qe-1');
       expect(repo.count('t-1')).toBe(2);
+    });
+
+    it('returns 0 for empty tenant', () => {
+      expect(repo.count('t-nobody')).toBe(0);
+    });
+
+    it('counts only entries with the given status when status is provided', () => {
+      repo.enqueue(makeEntry({ id: 'qe-1' }));
+      repo.enqueue(makeEntry({ id: 'qe-2' }));
+      repo.enqueue(makeEntry({ id: 'qe-3' }));
+      repo.markSynced('qe-1');
+      repo.markConflict('qe-2', { serverVersion: 2, serverPayload: {} });
+      expect(repo.count('t-1', 'pending')).toBe(1);
+      expect(repo.count('t-1', 'synced')).toBe(1);
+      expect(repo.count('t-1', 'conflict')).toBe(1);
+    });
+
+    it('is tenant-isolated', () => {
+      repo.enqueue(makeEntry({ id: 'qe-1', tenantId: 't-1' }));
+      repo.enqueue(makeEntry({ id: 'qe-2', tenantId: 't-2' }));
+      expect(repo.count('t-1')).toBe(1);
+      expect(repo.count('t-2')).toBe(1);
     });
   });
 });

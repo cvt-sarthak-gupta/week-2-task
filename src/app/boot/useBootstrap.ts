@@ -7,10 +7,24 @@ import { queryKeys } from '@/core/api/queryKeys';
 const CONFIG_CACHE_KEY = 'hcd_permission_config';
 const CONFIG_VERSION_KEY = 'hcd_permission_config_version';
 
+function isValidPermissionSchema(v: unknown): v is PermissionSchema {
+  if (!v || typeof v !== 'object') return false;
+  const s = v as Record<string, unknown>;
+  return (
+    Array.isArray(s['capabilities']) &&
+    typeof s['featureFlags'] === 'object' &&
+    s['featureFlags'] !== null &&
+    typeof s['layout'] === 'object' &&
+    s['layout'] !== null
+  );
+}
+
 function loadCachedConfig(): PermissionSchema | null {
   try {
     const raw = localStorage.getItem(CONFIG_CACHE_KEY);
-    return raw ? (JSON.parse(raw) as PermissionSchema) : null;
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isValidPermissionSchema(parsed) ? parsed : null;
   } catch {
     return null;
   }

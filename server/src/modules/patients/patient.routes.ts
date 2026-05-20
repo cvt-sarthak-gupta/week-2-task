@@ -20,6 +20,18 @@ export function createPatientRouter(store: InMemoryStore<PatientEntity>, broadca
       const controller = new PatientController(service, broadcaster);
       await controller.index(req, res);
     },
+    export: async (req: Request, res: Response) => {
+      const tenantId = String(req.query['tenantId'] ?? (req as Request & { ctx?: { tenantId: string } }).ctx?.tenantId ?? '');
+      const service = getService(tenantId);
+      const controller = new PatientController(service, broadcaster);
+      await controller.export(req, res);
+    },
+    stream: async (req: Request, res: Response) => {
+      const tenantId = String(req.query['tenantId'] ?? '');
+      const service = getService(tenantId);
+      const controller = new PatientController(service, broadcaster);
+      await controller.stream(req, res);
+    },
     show: async (req: Request, res: Response) => {
       const tenantId = (req as Request & { ctx?: { tenantId: string } }).ctx?.tenantId ?? '';
       const service = getService(tenantId);
@@ -34,6 +46,8 @@ export function createPatientRouter(store: InMemoryStore<PatientEntity>, broadca
     },
   };
 
+  router.get('/stream', ctrl.stream); // before /:id so Express doesn't treat "stream" as an id
+  router.get('/export', ctrl.export); // before /:id so Express doesn't treat "export" as an id
   router.get('/', ctrl.index);
   router.get('/:id', authMiddleware, ctrl.show);
   router.patch('/:id', authMiddleware, ctrl.patch);

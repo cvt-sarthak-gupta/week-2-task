@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, Input, Select, Space, Modal, Tag, Tooltip } from 'antd';
-import { SearchOutlined, ClearOutlined, FilterOutlined } from '@ant-design/icons';
+import { SearchOutlined, ClearOutlined, FilterOutlined, DownloadOutlined } from '@ant-design/icons';
 import type { PatientFilters } from './patientFilters';
 import { PATIENT_STATUSES, PATIENT_WARDS } from './patientFilters';
 import { FilterBuilder } from '@/features/filters/FilterBuilder';
@@ -15,7 +15,9 @@ interface FilterBarProps {
   hasActiveFilters: boolean;
   totalLoaded: number;
   total: number;
-  isFetchingMore?: boolean;
+  isLoading?: boolean;
+  isExporting?: boolean;
+  onExport?: () => void;
   presetSlot?: ReactNode;
 }
 
@@ -36,7 +38,9 @@ export function FilterBar({
   hasActiveFilters,
   totalLoaded,
   total,
-  isFetchingMore,
+  isLoading,
+  isExporting,
+  onExport,
   presetSlot,
 }: FilterBarProps) {
   const [searchDraft, setSearchDraft] = useState(filters.search ?? '');
@@ -165,13 +169,26 @@ export function FilterBar({
           </Button>
         )}
 
+        {onExport && (
+          <Tooltip title={hasActiveFilters ? 'Export filtered results to Excel' : 'Export all patients to Excel'}>
+            <Button
+              icon={<DownloadOutlined aria-hidden />}
+              onClick={onExport}
+              loading={isExporting ?? false}
+              aria-label="Export to Excel"
+            >
+              Export
+            </Button>
+          </Tooltip>
+        )}
+
         {presetSlot}
 
         <Space style={{ marginLeft: 'auto', fontSize: 12, color: '#8c8c8c', whiteSpace: 'nowrap' }}>
           <span>
             {totalLoaded < total ? `${totalLoaded} of ${total}` : `${total}`} records
           </span>
-          {isFetchingMore && <span style={{ color: '#1677ff' }}>Loading more…</span>}
+          {isLoading && <span style={{ color: '#1677ff' }}>Loading…</span>}
         </Space>
       </div>
 

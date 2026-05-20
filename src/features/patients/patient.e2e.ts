@@ -8,7 +8,7 @@ async function loginAs(page: Page, role: 'admin' | 'viewer' | 'coordinator' = 'a
     viewer:      { email: 'readonly@tenant-a.com',     password: 'password123' },
     coordinator: { email: 'coordinator@tenant-a.com',  password: 'password123' },
   };
-  const { email, password } = credentials[role];
+  const { email, password } = credentials[role]!;
   await page.goto(BASE);
   await page.getByLabel(/email/i).fill(email);
   await page.getByLabel(/password/i).fill(password);

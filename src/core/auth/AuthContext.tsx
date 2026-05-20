@@ -36,6 +36,13 @@ function bootstrapUserFromToken(): User | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(bootstrapUserFromToken);
 
+  // Clears client-side session immediately without any network calls.
+  // Used by the auth:expired handler so we don't trigger another refresh cycle.
+  const clearSession = useCallback(() => {
+    clearAccessToken();
+    setUser(null);
+  }, []);
+
   const login = useCallback(async (creds: LoginCredentials) => {
     const res = await apiFetch<{ accessToken: string; user: User }>('/auth/login', {
       method: 'POST',
@@ -47,16 +54,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await apiFetch('/auth/logout', { method: 'POST' }).catch(() => null);
-    clearAccessToken();
-    setUser(null);
-  }, []);
+    clearSession();
+  }, [clearSession]);
 
-  // Force logout when the refresh token call fails so the user re-authenticates with a fresh token
+  // When the refresh token is dead the server session is gone — clear state
+  // immediately without making more API calls (which would loop back here).
   useEffect(() => {
-    const handleExpired = () => void logout();
-    window.addEventListener('auth:expired', handleExpired);
-    return () => window.removeEventListener('auth:expired', handleExpired);
-  }, [logout]);
+    window.addEventListener('auth:expired', clearSession);
+    return () => window.removeEventListener('auth:expired', clearSession);
+  }, [clearSession]);
 
   return (
     <AuthContext.Provider value={{ user, isAuthenticated: user !== null, login, logout }}>

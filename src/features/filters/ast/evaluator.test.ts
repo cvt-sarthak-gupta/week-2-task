@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { evaluate } from './evaluator';
 import { Filter } from './types';
 import { makeMockPatient } from '@/core/testing/factories';
+import type { Patient } from '@/shared/types';
 
 const patient = makeMockPatient({ id: 'p1', age: 65, status: 'critical', ward: 'ICU', firstName: 'Alice', lastName: 'Smith' });
 const stablePatient = makeMockPatient({ id: 'p2', age: 30, status: 'stable', ward: 'General', firstName: 'Bob' });
@@ -101,6 +102,16 @@ describe('evaluate — range', () => {
   it('equal min/max (point range inclusive)', () => {
     expect(evaluate(Filter.range('age', 65, 65, [true, true]), patient)).toBe(true);
     expect(evaluate(Filter.range('age', 65, 65, [false, false]), patient)).toBe(false);
+  });
+});
+
+describe('evaluate — null/undefined field (100% branch on compareValues null check)', () => {
+  it('returns false when field value is explicitly null', () => {
+    // counter=0 when both fixture patients are created, so .notes is always set via
+    // the factory's `counter % 5 === 0` condition. Explicitly force null to hit
+    // the `fieldVal == null` → return false branch in compareValues.
+    const p = { ...patient, notes: null } as unknown as Patient;
+    expect(evaluate(Filter.eq('notes' as keyof Patient, 'anything'), p)).toBe(false);
   });
 });
 

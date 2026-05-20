@@ -64,7 +64,7 @@ describe('runSync — patient diff merge', () => {
     const result = await runSync(deps);
 
     expect(onPatientsUpdated).toHaveBeenCalledOnce();
-    const [patients] = onPatientsUpdated.mock.calls[0] as [Patient[]];
+    const patients = (onPatientsUpdated.mock.calls[0] as [Patient[]])[0]!;
     expect(patients.find((p) => p.id === 'p-1')?.status).toBe('critical');
     expect(result.updatedPatients.find((p) => p.id === 'p-1')?.status).toBe('critical');
   });
@@ -156,8 +156,8 @@ describe('runSync — conflict detection', () => {
     expect(calledMeta.serverVersion).toBe(5);
 
     expect(result.conflicts).toHaveLength(1);
-    expect(result.conflicts[0].entry.id).toBe('qe-1');
-    expect(result.conflicts[0].meta.serverVersion).toBe(5);
+    expect(result.conflicts[0]!.entry.id).toBe('qe-1');
+    expect(result.conflicts[0]!.meta.serverVersion).toBe(5);
   });
 
   it('does NOT call onEntryConflict for non-409 errors', async () => {

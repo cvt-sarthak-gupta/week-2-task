@@ -1,5 +1,6 @@
 import { getAccessToken, setAccessToken, clearAccessToken, isTokenExpired } from './tokens';
-import type { Capability } from '../permissions/schema';
+import type { Capability, PermissionSchema } from '../permissions/schema';
+import { canWithFlag } from '../permissions/engine';
 
 export class ApiError extends Error {
   constructor(
@@ -17,6 +18,16 @@ export class CapabilityDeniedError extends Error {
     super(`Client-side capability check failed: ${capability}`);
     this.name = 'CapabilityDeniedError';
   }
+}
+
+let _activeSchema: PermissionSchema | null = null;
+
+export function setActivePermissionSchema(schema: PermissionSchema | null): void {
+  _activeSchema = schema;
+}
+
+interface ApiFetchOptions extends RequestInit {
+  requiredCapability?: Capability;
 }
 
 let refreshPromise: Promise<void> | null = null;
@@ -40,9 +51,15 @@ async function refreshToken(): Promise<void> {
 
 export async function apiFetch<T>(
   path: string,
-  options: RequestInit = {},
+  { requiredCapability, ...options }: ApiFetchOptions = {},
   skipRefresh = false,
 ): Promise<T> {
+  if (requiredCapability !== undefined && _activeSchema !== null) {
+    if (!canWithFlag(_activeSchema, requiredCapability)) {
+      throw new CapabilityDeniedError(requiredCapability);
+    }
+  }
+
   let token = getAccessToken();
 
   if (token && isTokenExpired(token) && !skipRefresh) {

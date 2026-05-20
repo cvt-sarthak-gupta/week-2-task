@@ -9,6 +9,8 @@ export interface SyncResult {
   conflicts: Array<{ entry: QueueEntry; meta: ConflictMeta }>;
 }
 
+const MAX_QUEUE_RETRIES = 5;
+
 export interface SyncDependencies {
   tenantId: string;
   getLocalPatients: () => Patient[];
@@ -16,6 +18,7 @@ export interface SyncDependencies {
   onPatientsUpdated: (patients: Patient[]) => void;
   onEntryConflict: (entry: QueueEntry, meta: ConflictMeta) => void;
   onEntrySynced: (id: string) => void;
+  onEntryRetried?: (id: string) => void;
   getLastSyncAt: () => number;
   setLastSyncAt: (ts: number) => void;
 }
@@ -43,6 +46,7 @@ export async function runSync(deps: SyncDependencies): Promise<SyncResult> {
     // 3. Replay offline queue in order
     const queue = deps.getPendingQueue();
     for (const entry of queue) {
+      if (entry.retries >= MAX_QUEUE_RETRIES) continue;
       try {
         await apiFetch(`/${entry.entity}s/${entry.entityId}`, {
           method: entry.op === 'delete' ? 'DELETE' : entry.op === 'create' ? 'POST' : 'PATCH',
@@ -58,8 +62,10 @@ export async function runSync(deps: SyncDependencies): Promise<SyncResult> {
             deps.onEntryConflict(entry, conflictMeta);
             conflicts.push({ entry, meta: conflictMeta });
           }
+        } else {
+          // Non-conflict error: increment retry counter and leave in queue for next sync
+          deps.onEntryRetried?.(entry.id);
         }
-        // Other errors: leave in queue for next sync
       }
     }
 

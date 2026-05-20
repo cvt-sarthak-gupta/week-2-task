@@ -40,6 +40,7 @@ export function useSyncOnReconnect(
             },
             onEntryConflict: (entry, meta) => queueRepo.markConflict(entry.id, meta),
             onEntrySynced: (id) => queueRepo.markSynced(id),
+            onEntryRetried: (id) => queueRepo.incrementRetries(id),
             getLastSyncAt: () => {
               const row = db.queryOne<{ last_sync_at: number }>(
                 'SELECT last_sync_at FROM sync_meta WHERE tenant_id = ?',

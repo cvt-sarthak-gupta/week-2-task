@@ -41,6 +41,31 @@ export class PatientController extends BaseController {
     } catch (e) { this.handleError(e, res); }
   }
 
+  async export(req: Request, res: Response): Promise<void> {
+    try {
+      const filterDto: import('./patient.service').PatientFilterDto = {};
+      if (req.query['status'])    filterDto.status    = String(req.query['status']);
+      if (req.query['ward'])      filterDto.ward      = String(req.query['ward']);
+      if (req.query['search'])    filterDto.search    = String(req.query['search']);
+      if (req.query['sort'])      filterDto.sort      = String(req.query['sort']);
+      if (req.query['filterAst']) filterDto.filterAst = String(req.query['filterAst']);
+      const patients = await this.service.exportAll(filterDto);
+      res.status(200).json(patients);
+    } catch (e) { this.handleError(e, res); }
+  }
+
+  async stream(_req: Request, res: Response): Promise<void> {
+    try {
+      const patients = await this.service.findAllForStream();
+      res.setHeader('Content-Type', 'application/x-ndjson');
+      res.setHeader('Cache-Control', 'no-cache');
+      for (const patient of patients) {
+        res.write(JSON.stringify(patient) + '\n');
+      }
+      res.end();
+    } catch (e) { this.handleError(e, res); }
+  }
+
   async patch(req: Request, res: Response): Promise<void> {
     try {
       const id = req.params['id'] ?? '';

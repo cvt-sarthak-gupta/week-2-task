@@ -57,10 +57,17 @@ export function useUpdatePreset(tenantId: string, userId: string) {
 
   const mutation = useMutation({
     mutationFn: (payload: UpdatePresetPayload) => {
-      const { id, force, ...body } = payload;
+      const { id, force, version, ...body } = payload;
+      const headers: Record<string, string> = {};
+      if (!force) {
+        // If-Match enables true optimistic concurrency: the server rejects the
+        // write if the version has changed since we last loaded the preset.
+        headers['If-Match'] = String(version);
+      }
       return apiFetch<FilterPreset>(`/presets/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify(force ? { ...body, force: true } : body),
+        headers,
+        body: JSON.stringify(force ? { ...body, version, force: true } : { ...body, version }),
       });
     },
     onSuccess: () => {

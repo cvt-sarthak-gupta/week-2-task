@@ -14,6 +14,7 @@ import { ConnectionManager } from './connectionManager';
 import type { ITransport, TransportState } from './transport/ITransport';
 import { streamWorkerClient } from '@/core/workers/StreamWorkerClient';
 import { SseTransport } from './transport/SseTransport';
+import { getAccessToken } from '@/core/api/tokens';
 
 const mockSendEvent = vi.mocked(streamWorkerClient.sendEvent);
 
@@ -110,7 +111,7 @@ describe('ConnectionManager — connect/disconnect lifecycle', () => {
     });
     wsTx.fireMessage(event);
     expect(mockSendEvent).toHaveBeenCalledOnce();
-    expect(mockSendEvent.mock.calls[0][0]).toMatchObject({ type: 'status_changed' });
+    expect(mockSendEvent.mock.calls[0]![0]).toMatchObject({ type: 'status_changed' });
   });
 
   it('discards pong messages without forwarding to worker', () => {
@@ -149,7 +150,7 @@ describe('ConnectionManager — heartbeat', () => {
 
     vi.advanceTimersByTime(15_000);
     expect(wsTx.send).toHaveBeenCalledOnce();
-    const msg = JSON.parse((wsTx.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as string) as { type: string };
+    const msg = JSON.parse((wsTx.send as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string) as { type: string };
     expect(msg.type).toBe('ping');
   });
 
@@ -174,6 +175,31 @@ describe('ConnectionManager — heartbeat', () => {
 
     expect(wsTx.close).toHaveBeenCalled();
     expect(manager.status).toBe('reconnecting');
+  });
+
+  it('uses refreshed token on heartbeat-timeout reconnect when getAccessToken returns a value', () => {
+    manager.connect('ws://localhost', 'original-token');
+    wsTx.fireState('connected');
+
+    vi.mocked(getAccessToken).mockReturnValueOnce('refreshed-token');
+    vi.advanceTimersByTime(15_000); // ping sent
+    vi.advanceTimersByTime(5_001); // pong timeout fires → transport.close() + reconnect.schedule()
+    // Advance past the reconnect backoff (max first-attempt jitter = 1000ms) but not
+    // far enough to fire the heartbeat interval again (would need ~9s more).
+    vi.advanceTimersByTime(1_001);
+    expect(wsTx.open).toHaveBeenLastCalledWith('ws://localhost', 'refreshed-token');
+  });
+
+  it('keeps existing token when getAccessToken returns null on heartbeat-timeout reconnect', () => {
+    manager.connect('ws://localhost', 'original-token');
+    wsTx.fireState('connected');
+
+    vi.mocked(getAccessToken).mockReturnValueOnce(null as unknown as string);
+    vi.advanceTimersByTime(15_000); // ping sent
+    vi.advanceTimersByTime(5_001); // pong timeout fires → reconnect.schedule()
+    vi.advanceTimersByTime(1_001); // reconnect callback fires — getAccessToken returned null
+    // token should remain 'original-token' since fresh was falsy
+    expect(wsTx.open).toHaveBeenLastCalledWith('ws://localhost', 'original-token');
   });
 });
 
@@ -204,6 +230,32 @@ describe('ConnectionManager — SSE fallback', () => {
     sseTx.fireState('connected');
     vi.advanceTimersByTime(60_000); // well past the 15s heartbeat interval
     expect(sseTx.send).not.toHaveBeenCalled();
+  });
+
+  it('schedules reconnect when SSE fires disconnected', () => {
+    manager.connect('http://localhost/sse', 'token');
+    sseTx.fireState('connected');
+    sseTx.fireState('disconnected');
+    expect(manager.status).toBe('reconnecting');
+  });
+
+  it('schedules reconnect when SSE fires failed', () => {
+    manager.connect('http://localhost/sse', 'token');
+    sseTx.fireState('connected');
+    sseTx.fireState('failed');
+    expect(manager.status).toBe('reconnecting');
+  });
+
+  it('uses fresh token on SSE reconnect when available', () => {
+    manager.connect('http://localhost/sse', 'token');
+    sseTx.fireState('connected');
+
+    vi.mocked(getAccessToken).mockReturnValueOnce('new-sse-token');
+    sseTx.fireState('disconnected');
+
+    // Advance past max first-attempt reconnect jitter (1000ms)
+    vi.advanceTimersByTime(1_001);
+    expect(sseTx.open).toHaveBeenLastCalledWith('http://localhost/sse', 'new-sse-token');
   });
 });
 
@@ -261,7 +313,7 @@ describe('ConnectionManager — SSE fallback activation from WS failure', () => 
     });
     sseTx.fireMessage(sseEvent);
     expect(mockSendEvent).toHaveBeenCalledTimes(2);
-    expect(mockSendEvent.mock.calls[1][0]).toMatchObject({ type: 'status_changed', entityId: 'p-2' });
+    expect(mockSendEvent.mock.calls[1]![0]).toMatchObject({ type: 'status_changed', entityId: 'p-2' });
   });
 
   it('does not send heartbeat pings after switching to SSE', () => {

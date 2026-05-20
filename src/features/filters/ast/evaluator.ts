@@ -7,7 +7,7 @@ function getField(patient: Patient, field: keyof Patient): string | number | boo
 }
 
 function compareValues(op: CompareNode['op'], fieldVal: unknown, compareVal: string | number | boolean): boolean {
-  if (fieldVal === undefined || fieldVal === null) return false;
+  if (fieldVal == null) return false;
 
   switch (op) {
     case 'eq':
@@ -26,6 +26,7 @@ function compareValues(op: CompareNode['op'], fieldVal: unknown, compareVal: str
       return Number(fieldVal) < Number(compareVal);
     case 'lte':
       return Number(fieldVal) <= Number(compareVal);
+    /* v8 ignore next 2 */
     default:
       return exhaustiveCheck(op);
   }
@@ -57,6 +58,7 @@ export function evaluate(node: FilterNode, patient: Patient): boolean {
       return compareValues(node.op, getField(patient, node.field), node.value);
     case 'range':
       return evaluateRange(node, patient);
+    /* v8 ignore next 2 */
     default:
       return exhaustiveCheck(node);
   }

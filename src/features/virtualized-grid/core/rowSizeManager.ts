@@ -68,11 +68,17 @@ export class RowSizeManager {
     this._count = newCount;
     if (newCount > old) {
       this.sizes.length = newCount;
-      this.tree.length = newCount + 1;
       for (let i = old; i < newCount; i++) {
         this.sizes[i] = this.defaultSize;
-        this.tree[i + 1] = 0;
-        this.updateTree(i + 1, this.defaultSize);
+      }
+      // Rebuild the Fenwick tree from scratch. An incremental approach would
+      // corrupt shared higher-level nodes that span both existing and new rows
+      // (e.g. tree[8] covers rows 0-7 and must incorporate all of them). A
+      // full rebuild is O(n log n) but always correct.
+      this.tree.length = newCount + 1;
+      this.tree.fill(0);
+      for (let i = 0; i < newCount; i++) {
+        this.updateTree(i + 1, this.sizes[i] ?? this.defaultSize);
       }
     } else {
       this.sizes.length = newCount;

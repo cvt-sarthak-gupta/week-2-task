@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Modal, Typography, Space, Descriptions } from 'antd';
 import { WarningOutlined } from '@ant-design/icons';
 import type { QueueEntry } from '@/core/offline/queue/types';
@@ -114,5 +115,3 @@ export function ConflictModal({ conflicts, onResolve, onDismiss }: ConflictModal
   );
 }
 
-// useState needs to be imported
-import { useState } from 'react';

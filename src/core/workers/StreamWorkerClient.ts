@@ -9,12 +9,17 @@ type BatchCb = (updates: readonly PatientUpdate[]) => void;
  * Wraps stream.worker.ts. Sends raw DataEvents to the worker for off-main-thread
  * dedup, out-of-order reconciliation, and batching. Falls back to main-thread
  * processing if Workers are unavailable.
+ *
+ * Incoming batch_update messages are accumulated and flushed once per animation
+ * frame so the UI is updated at most 60fps regardless of event burst rate.
  */
 export class StreamWorkerClient {
   private worker: Worker | null = null;
   private fallbackLogic: StreamWorkerLogic | null = null;
   private fallbackFlushId: ReturnType<typeof setTimeout> | null = null;
   private readonly batchCbs = new Set<BatchCb>();
+  private pendingUpdates: PatientUpdate[] = [];
+  private rafId: number | null = null;
 
   init(): void {
     if (this.worker || this.fallbackLogic) return;
@@ -79,6 +84,22 @@ export class StreamWorkerClient {
       clearTimeout(this.fallbackFlushId);
       this.fallbackFlushId = null;
     }
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+    this.pendingUpdates = [];
+  }
+
+  private scheduleRafFlush(): void {
+    if (this.rafId !== null) return;
+    this.rafId = requestAnimationFrame(() => {
+      this.rafId = null;
+      if (this.pendingUpdates.length === 0) return;
+      const updates = this.pendingUpdates;
+      this.pendingUpdates = [];
+      this.batchCbs.forEach((cb) => cb(updates));
+    });
   }
 
   private activateFallback(): void {
@@ -91,14 +112,18 @@ export class StreamWorkerClient {
       this.fallbackFlushId = null;
       if (!this.fallbackLogic?.hasPending()) return;
       const updates = this.fallbackLogic.flushBatch();
-      this.batchCbs.forEach((cb) => cb(updates));
+      // Route through the same RAF buffer so the fallback path also stays at 60fps
+      this.pendingUpdates.push(...updates);
+      this.scheduleRafFlush();
     }, 0);
   }
 
   private handleWorkerMessage(msg: WorkerResponse): void {
     switch (msg.type) {
       case 'batch_update':
-        this.batchCbs.forEach((cb) => cb(msg.updates));
+        // Accumulate updates and flush via RAF to cap UI updates at 60fps
+        this.pendingUpdates.push(...msg.updates);
+        this.scheduleRafFlush();
         break;
       case 'passthrough_event':
         // Non-patient events (vitals, alerts) come back through the event bus

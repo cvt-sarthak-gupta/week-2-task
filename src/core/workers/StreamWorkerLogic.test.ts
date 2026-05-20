@@ -78,7 +78,7 @@ describe('StreamWorkerLogic — out-of-order rejection', () => {
     logic.processEvent(makeStatusEvent({ id: 'e2', version: 4, entityId: 'p-1' }));
     const batch = logic.flushBatch();
     expect(batch).toHaveLength(1);
-    expect(batch[0].version).toBe(5);
+    expect(batch[0]!.version).toBe(5);
   });
 
   it('rejects an equal-version event (already applied)', () => {
@@ -104,14 +104,14 @@ describe('StreamWorkerLogic — batch building', () => {
 
   it('status_changed produces a patch with newStatus', () => {
     logic.processEvent(makeStatusEvent({ id: 'e1', entityId: 'p-1', newStatus: 'critical' }));
-    const [update] = logic.flushBatch();
+    const update = logic.flushBatch()[0]!;
     expect(update.id).toBe('p-1');
     expect(update.patch.status).toBe('critical');
   });
 
   it('patient_updated merges payload into patch', () => {
     logic.processEvent(makePatientEvent({ id: 'e1', entityId: 'p-2', notes: 'hello' }));
-    const [update] = logic.flushBatch();
+    const update = logic.flushBatch()[0]!;
     expect(update.id).toBe('p-2');
     expect(update.patch.notes).toBe('hello');
   });
@@ -122,7 +122,7 @@ describe('StreamWorkerLogic — batch building', () => {
       id: 'e1', entityId: 'p-1', version: 1, ts: Date.now(),
       payload: { heartRate: 90, bp: '120/80', temp: 37, o2sat: 98 },
     });
-    const [update] = logic.flushBatch();
+    const update = logic.flushBatch()[0]!;
     expect(update.id).toBe('p-1');
     expect(update.patch.heartRate).toBe(90);
     expect(update.patch.bp).toBe('120/80');
@@ -131,7 +131,6 @@ describe('StreamWorkerLogic — batch building', () => {
   });
 
   it('multiple vitals_updated events for the same entity all produce patches (bypasses version gate)', () => {
-    // version: 0 on all three — would be rejected by entity-version check for any other type
     logic.processEvent({ type: 'vitals_updated', id: 'v1', entityId: 'p-1', version: 0, ts: Date.now(), payload: { heartRate: 72, bp: '120/80', temp: 36.6, o2sat: 98 } });
     logic.processEvent({ type: 'vitals_updated', id: 'v2', entityId: 'p-1', version: 0, ts: Date.now(), payload: { heartRate: 75, bp: '122/82', temp: 36.7, o2sat: 97 } });
     logic.processEvent({ type: 'vitals_updated', id: 'v3', entityId: 'p-1', version: 0, ts: Date.now(), payload: { heartRate: 78, bp: '118/78', temp: 36.5, o2sat: 99 } });
@@ -165,9 +164,14 @@ describe('StreamWorkerLogic — batch building', () => {
   it('patch includes updatedAt and version from event', () => {
     const ts = 1_700_000_000_000;
     logic.processEvent(makeStatusEvent({ id: 'e1', version: 7, ts }));
-    const [update] = logic.flushBatch();
+    const update = logic.flushBatch()[0]!;
     expect(update.patch.updatedAt).toBe(new Date(ts).toISOString());
     expect(update.patch.version).toBe(7);
     expect(update.version).toBe(7);
+  });
+
+  it('unknown event type hits default branch and produces no patch', () => {
+    logic.processEvent({ type: 'future_event_type', id: 'u1', entityId: 'p-1', version: 1, ts: Date.now() } as unknown as DataEvent);
+    expect(logic.flushBatch()).toHaveLength(0);
   });
 });

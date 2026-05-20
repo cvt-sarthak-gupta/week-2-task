@@ -111,6 +111,79 @@ export class PatientService {
     return this.repo.findSince(since);
   }
 
+  /** Returns all patients matching the given filters — used by the export endpoint (no pagination). */
+  async exportAll(filters: PatientFilterDto = {}): Promise<PatientEntity[]> {
+    if (filters.filterAst) {
+      let ast;
+      try {
+        ast = deserializeFilter(filters.filterAst);
+      } catch {
+        return [];
+      }
+      const items = await this.repo.findAll({ page: 1, limit: Number.MAX_SAFE_INTEGER });
+      let matched = items.data.filter((p) => evaluateFilter(ast, p as unknown as Record<string, unknown>));
+      if (filters.sort) {
+        const sortParts: Array<{ field: string; dir: 'ASC' | 'DESC' }> = [];
+        for (const part of filters.sort.split(',')) {
+          const [field, dir] = part.split(':');
+          if (field && (dir === 'ASC' || dir === 'DESC')) sortParts.push({ field, dir });
+        }
+        if (sortParts.length > 0) {
+          matched = matched.sort((a, b) => {
+            for (const { field, dir } of sortParts) {
+              const av = (a as unknown as Record<string, unknown>)[field];
+              const bv = (b as unknown as Record<string, unknown>)[field];
+              let cmp = 0;
+              if (typeof av === 'string' && typeof bv === 'string') cmp = av.localeCompare(bv);
+              else if (typeof av === 'number' && typeof bv === 'number') cmp = av - bv;
+              if (cmp !== 0) return dir === 'ASC' ? cmp : -cmp;
+            }
+            return 0;
+          });
+        }
+      }
+      return matched;
+    }
+
+    const where: Partial<PatientEntity> = {};
+    if (filters.status) where.status = filters.status as PatientEntity['status'];
+    if (filters.ward) where.ward = filters.ward;
+
+    const order: Partial<Record<keyof PatientEntity, 'ASC' | 'DESC'>> = {};
+    if (filters.sort) {
+      for (const part of filters.sort.split(',')) {
+        const [field, dir] = part.split(':');
+        if (field && (dir === 'ASC' || dir === 'DESC')) {
+          order[field as keyof PatientEntity] = dir;
+        }
+      }
+    }
+    if (Object.keys(order).length === 0) order.updatedAt = 'DESC';
+
+    const search = filters.search
+      ? { term: filters.search, fields: ['firstName', 'lastName', 'mrn'] as (keyof PatientEntity)[] }
+      : undefined;
+
+    const result = await this.repo.findAll({
+      page: 1,
+      limit: Number.MAX_SAFE_INTEGER,
+      ...(Object.keys(where).length > 0 && { where }),
+      order,
+      ...(search && { search }),
+    });
+    return result.data;
+  }
+
+  /** Returns all patients sorted by updatedAt DESC — used by the NDJSON stream endpoint. */
+  async findAllForStream(): Promise<PatientEntity[]> {
+    const result = await this.repo.findAll({
+      page: 1,
+      limit: Number.MAX_SAFE_INTEGER,
+      order: { updatedAt: 'DESC' },
+    });
+    return result.data;
+  }
+
   async update(id: string, dto: UpdatePatientDto, expectedVersion?: number): Promise<PatientEntity> {
     const existing = await this.findById(id);
 

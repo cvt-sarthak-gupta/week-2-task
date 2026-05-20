@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { ConfigProvider, App as AntApp } from 'antd';
-import { QueryProvider } from './providers/QueryProvider';
+import { QueryProvider, queryClient } from './providers/QueryProvider';
 import { AuthProvider, useAuth } from '@/core/auth/AuthContext';
 import { PermissionProvider } from '@/core/permissions/PermissionProvider';
 import { DEFAULT_PERMISSION_SCHEMA } from '@/core/permissions/schema';
@@ -16,6 +16,18 @@ import { getOfflineRepos } from '@/core/offline/db/repos';
 function BootstrappedApp() {
   const { user } = useAuth();
   const { data: schema } = useBootstrap(user?.id ?? null);
+
+  // Clear the entire React Query cache whenever the identity changes so stale
+  // data from a previous session never bleeds into the new one. This covers
+  // logout (prev → null), user switch, and tenant switch.
+  const prevIdentityRef = useRef<string | null>(null);
+  useEffect(() => {
+    const identity = user ? `${user.tenantId}:${user.id}` : null;
+    if (prevIdentityRef.current !== null && prevIdentityRef.current !== identity) {
+      queryClient.clear();
+    }
+    prevIdentityRef.current = identity;
+  }, [user]);
 
   // Initialize stream worker and connect realtime stream when the user authenticates
   useEffect(() => {

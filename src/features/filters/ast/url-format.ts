@@ -160,7 +160,7 @@ class UrlParser {
       if (this.peekChar(':')) {
         this.consume();
         const flags = this.readWord(); // "ii" "ei" "ie" "ee"
-        minInc = (flags[0] ?? 'i') !== 'e';
+        minInc = flags[0] !== 'e'; // readWord guarantees non-empty; undefined !== 'e' is true
         maxInc = (flags[1] ?? 'i') !== 'e';
       }
       const min = inferValue(minRaw);
@@ -198,12 +198,17 @@ class UrlParser {
     return this.input.slice(start, this.pos);
   }
 
-  /** Read a range segment — stops at unescaped ':' ',' ')'. */
+  /** Read a range segment — stops at unescaped ':' ',' ')'. Returns raw escaped string. */
   private readSegment(): string {
     let s = '';
     while (this.pos < this.input.length) {
       const ch = this.input[this.pos]!;
-      if (ch === '\\') { this.pos++; s += this.input[this.pos] ?? ''; this.pos++; continue; }
+      if (ch === '\\') {
+        // Preserve escape sequence intact so inferValue can unescape once
+        s += ch; this.pos++;
+        s += this.input[this.pos] ?? ''; this.pos++;
+        continue;
+      }
       if (ch === ':' || ch === ',' || ch === ')') break;
       s += ch;
       this.pos++;
@@ -211,12 +216,17 @@ class UrlParser {
     return s;
   }
 
-  /** Read a compare value — stops at unescaped ',' ')'. */
+  /** Read a compare value — stops at unescaped ',' ')'. Returns raw escaped string. */
   private readValue(): string {
     let s = '';
     while (this.pos < this.input.length) {
       const ch = this.input[this.pos]!;
-      if (ch === '\\') { this.pos++; s += this.input[this.pos] ?? ''; this.pos++; continue; }
+      if (ch === '\\') {
+        // Preserve escape sequence intact so inferValue can unescape once
+        s += ch; this.pos++;
+        s += this.input[this.pos] ?? ''; this.pos++;
+        continue;
+      }
       if (ch === ',' || ch === ')') break;
       s += ch;
       this.pos++;

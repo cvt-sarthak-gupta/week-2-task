@@ -28,7 +28,7 @@ export class PatientRepository {
          version = excluded.version,
          updated_at = excluded.updated_at
        WHERE excluded.version >= patients.version`,
-      [patient.id, tenantId, JSON.stringify(patient), patient.version, Date.now()],
+      [patient.id, tenantId, JSON.stringify(patient), patient.version, new Date(patient.updatedAt).getTime()],
     );
   }
 
@@ -57,46 +57,80 @@ export class PatientRepository {
     return rows.map((r) => JSON.parse(r.data) as Patient);
   }
 
-  findFiltered(tenantId: string, filters: OfflinePatientFilters, page = 1, limit = 200): PaginatedResult<Patient> {
-    let patients = this.findAll(tenantId);
+  findFiltered(
+    tenantId: string,
+    filters: OfflinePatientFilters,
+    page = 1,
+    limit = 200,
+    filterFn?: (patient: Patient) => boolean,
+  ): PaginatedResult<Patient> {
+    const whereParts: string[] = ['tenant_id = ?'];
+    const baseParams: unknown[] = [tenantId];
 
     if (filters.status) {
-      patients = patients.filter((p) => p.status === filters.status);
+      whereParts.push("json_extract(data, '$.status') = ?");
+      baseParams.push(filters.status);
     }
     if (filters.ward) {
-      patients = patients.filter((p) => p.ward === filters.ward);
+      whereParts.push("json_extract(data, '$.ward') = ?");
+      baseParams.push(filters.ward);
     }
     if (filters.search) {
-      const term = filters.search.toLowerCase();
-      patients = patients.filter(
-        (p) =>
-          p.firstName.toLowerCase().includes(term) ||
-          p.lastName.toLowerCase().includes(term) ||
-          p.mrn.toLowerCase().includes(term),
+      const term = '%' + filters.search.toLowerCase() + '%';
+      whereParts.push(
+        "(LOWER(json_extract(data, '$.firstName')) LIKE ? OR LOWER(json_extract(data, '$.lastName')) LIKE ? OR LOWER(json_extract(data, '$.mrn')) LIKE ?)",
       );
+      baseParams.push(term, term, term);
     }
+
+    const where = whereParts.join(' AND ');
+
+    let orderBy = 'updated_at DESC';
     if (filters.sort) {
       const sortParts = filters.sort.split(',').map((s) => {
         const [field, dir] = s.split(':');
-        return { field: field ?? '', dir: (dir ?? 'ASC') as 'ASC' | 'DESC' };
+        const safeDir = (dir ?? 'ASC').toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+        if (field === 'updated_at') return `updated_at ${safeDir}`;
+        return `json_extract(data, '$.${field}') ${safeDir}`;
       });
-      patients = [...patients].sort((a, b) => {
-        for (const { field, dir } of sortParts) {
-          const av = (a as unknown as Record<string, unknown>)[field];
-          const bv = (b as unknown as Record<string, unknown>)[field];
-          let cmp = 0;
-          if (typeof av === 'string' && typeof bv === 'string') cmp = av.localeCompare(bv);
-          else if (typeof av === 'number' && typeof bv === 'number') cmp = av - bv;
-          if (cmp !== 0) return dir === 'ASC' ? cmp : -cmp;
-        }
-        return 0;
-      });
+      orderBy = sortParts.join(', ');
     }
 
-    const total = patients.length;
-    const start = (page - 1) * limit;
+    if (filterFn) {
+      // AST filter can't be expressed as SQL — fetch all SQL-matching rows, apply
+      // filterFn in memory, then paginate the filtered list so counts are accurate.
+      const allRows = this.db.query<PatientRow>(
+        `SELECT * FROM patients WHERE ${where} ORDER BY ${orderBy}`,
+        baseParams,
+      );
+      const filtered = allRows
+        .map((r) => JSON.parse(r.data) as Patient)
+        .filter(filterFn);
+      const total = filtered.length;
+      const offset = (page - 1) * limit;
+      return {
+        data: filtered.slice(offset, offset + limit),
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      };
+    }
+
+    const countRow = this.db.queryOne<{ count: number }>(
+      `SELECT COUNT(*) as count FROM patients WHERE ${where}`,
+      baseParams,
+    );
+    const total = countRow?.count ?? 0;
+
+    const offset = (page - 1) * limit;
+    const rows = this.db.query<PatientRow>(
+      `SELECT * FROM patients WHERE ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
+      [...baseParams, limit, offset],
+    );
+
     return {
-      data: patients.slice(start, start + limit),
+      data: rows.map((r) => JSON.parse(r.data) as Patient),
       total,
       page,
       limit,

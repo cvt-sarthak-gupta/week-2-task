@@ -60,6 +60,10 @@ describe('serializeUrl — readable output', () => {
     expect(serializeUrl(Filter.range('age', 60, 80, [false, false]))).toBe('age:btwn:60:80:ee');
   });
 
+  it('range inclusive-min exclusive-max shows :ie', () => {
+    expect(serializeUrl(Filter.range('age', 60, 80, [true, false]))).toBe('age:btwn:60:80:ie');
+  });
+
   it('complex nested expression is human-readable', () => {
     const f = Filter.and(
       Filter.or(Filter.eq('status', 'critical'), Filter.eq('status', 'stable')),
@@ -95,10 +99,23 @@ describe('round-trip: serializeUrl → deserializeUrl', () => {
     expect(rt(Filter.lt('age', 18))).toEqual(Filter.lt('age', 18));
     expect(rt(Filter.lte('age', 100))).toEqual(Filter.lte('age', 100));
   });
-  it('boolean value', () => {
+  it('boolean true value', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const f = Filter.eq('status' as any, true);
     expect(rt(f)).toEqual(f);
+  });
+
+  it('boolean false value round-trips', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const f = Filter.eq('status' as any, false);
+    expect(rt(f)).toEqual(f);
+  });
+
+  it('range inclusive-min exclusive-max [true,false] round-trips', () => {
+    // [true,false] exercises the minInc='i' branch in flags serialization
+    const f = Filter.range('age', 60, 80, [true, false]);
+    expect(rt(f)).toEqual(f);
+    expect(serializeUrl(f)).toBe('age:btwn:60:80:ie');
   });
   it('range inclusive', () => {
     const f = Filter.range('age', 60, 80, [true, true]);
@@ -136,6 +153,22 @@ describe('round-trip: serializeUrl → deserializeUrl', () => {
   it('value with backslash is escaped and round-trips', () => {
     const f = Filter.eq('mrn', 'A\\B');
     expect(rt(f)).toEqual(f);
+  });
+
+  it('range with comma in string bound exercises readSegment escape path', () => {
+    // Comma is escaped to \, by escapeVal; readSegment must preserve the sequence for inferValue
+    const serialized = 'ward:btwn:A\\,B:C\\,D';
+    const node = deserializeUrl(serialized);
+    expect(node).toMatchObject({ kind: 'range', field: 'ward', min: 'A,B', max: 'C,D' });
+    expect(serializeUrl(node)).toBe('ward:btwn:A\\,B:C\\,D');
+  });
+
+  it('range with closing paren in string bound exercises readSegment escape path', () => {
+    // ) is escaped to \) by escapeVal; readSegment must handle backslash before ')' stopper
+    const serialized = 'ward:btwn:A\\)B:C\\)D';
+    const node = deserializeUrl(serialized);
+    expect(node).toMatchObject({ kind: 'range', field: 'ward', min: 'A)B', max: 'C)D' });
+    expect(serializeUrl(node)).toBe('ward:btwn:A\\)B:C\\)D');
   });
 });
 
@@ -176,5 +209,34 @@ describe('deserializeUrl — error handling', () => {
   });
   it('throws on missing value', () => {
     expect(() => deserializeUrl('status:eq')).toThrow();
+  });
+  it('throws when readWord finds no word (empty word path)', () => {
+    // Input starting with a structural char causes readWord to throw immediately
+    expect(() => deserializeUrl(':eq:value')).toThrow();
+  });
+});
+
+describe('deserializeUrl — additional coverage', () => {
+  it('trailing comma before ) in AND is accepted', () => {
+    // The peekChar(')') break inside the and/or while loop fires for trailing commas
+    const node = deserializeUrl('and(status:eq:critical,ward:eq:ICU,)');
+    expect(node).toMatchObject({ kind: 'and', children: [{ value: 'critical' }, { value: 'ICU' }] });
+  });
+
+  it('single-char range flags: "i" defaults second bound to inclusive', () => {
+    // flags[1] ?? 'i' fires when flags has only one character
+    const node = deserializeUrl('age:btwn:60:80:i');
+    expect(node).toMatchObject({ kind: 'range', inclusive: [true, true] });
+  });
+
+  it('backslash at very end of compare value exercises ?? branch (undefined path)', () => {
+    // readValue: backslash is the last char in input, so input[pos] is undefined → ?? '' fires
+    const node = deserializeUrl('ward:eq:A\\');
+    expect(node).toMatchObject({ kind: 'compare', value: 'A\\' });
+  });
+
+  it('backslash at end of range min exercises readSegment ?? branch then throws', () => {
+    // readSegment: backslash is last char of input → ?? '' fires, then expect(':') throws
+    expect(() => deserializeUrl('ward:btwn:A\\')).toThrow();
   });
 });

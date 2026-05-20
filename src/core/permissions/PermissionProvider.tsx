@@ -1,8 +1,9 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import type { PermissionSchema } from './schema';
 import { DEFAULT_PERMISSION_SCHEMA } from './schema';
 import { canWithFlag } from './engine';
 import type { Capability } from './schema';
+import { setActivePermissionSchema } from '@/core/api/client';
 
 interface PermissionContextValue {
   readonly schema: PermissionSchema;
@@ -19,6 +20,12 @@ export function PermissionProvider({ schema, children }: { schema: PermissionSch
     () => ({ schema, can: (cap) => canWithFlag(schema, cap) }),
     [schema],
   );
+
+  useEffect(() => {
+    setActivePermissionSchema(schema);
+    return () => { setActivePermissionSchema(null); };
+  }, [schema]);
+
   return <PermissionContext.Provider value={value}>{children}</PermissionContext.Provider>;
 }
 
