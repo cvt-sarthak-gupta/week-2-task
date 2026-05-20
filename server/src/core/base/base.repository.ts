@@ -15,7 +15,6 @@ export abstract class BaseRepository<T extends { id: string; tenantId?: string }
     const isDefaultSort = orderKeys.length === 1 && orderKeys[0] === 'updatedAt' && (order as Record<string, string>)['updatedAt'] === 'DESC';
     const needsFilter = !!(where || search);
 
-    // Fast path: use pre-sorted cache for the common updatedAt-DESC, no-filter case
     let items: T[];
     if (isDefaultSort && !needsFilter) {
       const cached = this.store.getUpdatedAtDesc(this.tenantId);
@@ -76,10 +75,10 @@ export abstract class BaseRepository<T extends { id: string; tenantId?: string }
     return items.filter((item) => Object.entries(where).every(([k, v]) => (item as Record<string, unknown>)[k] === v)).length;
   }
 
-  async save(data: Partial<T>): Promise<T> {
-    const entity = data as T;
-    this.store.set(this.tenantId, entity);
-    return entity;
+  // Accepts a complete entity (not Partial) to prevent partial-save silent data loss.
+  async save(data: T): Promise<T> {
+    this.store.set(this.tenantId, data);
+    return data;
   }
 
   async update(id: string, data: Partial<T>): Promise<T> {

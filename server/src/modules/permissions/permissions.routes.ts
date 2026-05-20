@@ -1,7 +1,5 @@
 import { Router } from 'express';
 import { authMiddleware } from '../auth/auth.middleware';
-import jwt from 'jsonwebtoken';
-import { JWT_SECRET } from '../auth/auth.middleware';
 
 const DEFAULT_FLAGS = {
   analyticsWidget: false,
@@ -20,35 +18,46 @@ const FEATURE_FLAGS_BY_TENANT: Record<string, typeof DEFAULT_FLAGS> = {
 export function createPermissionsRouter(): Router {
   const router = Router();
 
-  router.get('/me/config', (req, res) => {
-    const header = req.headers.authorization;
-    if (!header?.startsWith('Bearer ')) { res.status(401).json({ status: 'error', message: 'Unauthorized' }); return; }
-    try {
-      const payload = jwt.verify(header.slice(7), JWT_SECRET) as {
-        sub: string; tenantId: string; capabilities: string[];
-      };
-      const flags = FEATURE_FLAGS_BY_TENANT[payload.tenantId] ?? DEFAULT_FLAGS;
-      res.status(200).json({
-        version: 'v1',
-        config: {
-          capabilities: payload.capabilities,
-          featureFlags: flags,
-          layout: {
-            visibleColumns: [
-              { field: 'mrn', label: 'MRN', visible: true },
-              { field: 'lastName', label: 'Last Name', visible: true },
-              { field: 'firstName', label: 'First Name', visible: true },
-              { field: 'status', label: 'Status', visible: true },
-              { field: 'ward', label: 'Ward', visible: true },
-            ],
-            sideWidgets: [],
-            actionBar: payload.capabilities.includes('editPatientStatus') ? ['editStatus'] : [],
-          },
+  // Use the shared authMiddleware — no re-implementation of JWT verification
+  router.get('/me/config', authMiddleware, (req, res) => {
+    const { tenantId, currentUser } = req.ctx;
+
+    // Capabilities come from the verified JWT claims embedded during login
+    const capabilities = (req.headers.authorization
+      ? (() => {
+          try {
+            const token = req.headers.authorization.slice(7);
+            const parts = token.split('.');
+            if (parts.length !== 3 || !parts[1]) return [];
+            const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString()) as { capabilities?: string[] };
+            return payload.capabilities ?? [];
+          } catch {
+            return [];
+          }
+        })()
+      : []) as string[];
+
+    const flags = FEATURE_FLAGS_BY_TENANT[tenantId] ?? DEFAULT_FLAGS;
+
+    res.status(200).json({
+      version: 'v1',
+      config: {
+        capabilities,
+        featureFlags: flags,
+        layout: {
+          visibleColumns: [
+            { field: 'mrn', label: 'MRN', visible: true },
+            { field: 'lastName', label: 'Last Name', visible: true },
+            { field: 'firstName', label: 'First Name', visible: true },
+            { field: 'status', label: 'Status', visible: true },
+            { field: 'ward', label: 'Ward', visible: true },
+          ],
+          sideWidgets: [],
+          actionBar: capabilities.includes('editPatientStatus') ? ['editStatus'] : [],
         },
-      });
-    } catch {
-      res.status(401).json({ status: 'error', message: 'Invalid token' });
-    }
+        userId: currentUser.id,
+      },
+    });
   });
 
   return router;

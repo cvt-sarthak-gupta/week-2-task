@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { getOfflineRepos } from '@/core/offline/db/repos';
 import { Button, Layout, Space, Spin, Typography, Alert, Badge } from 'antd';
 import { LogoutOutlined, WifiOutlined } from '@ant-design/icons';
 import { useAuth } from '@/core/auth/AuthContext';
@@ -280,14 +281,12 @@ export default function PatientPage() {
         conflicts={syncConflicts}
         onResolve={(entry, resolution) => {
           // Persist the resolution so the queue entry reflects the user's decision
-          void import('@/core/offline/db/repos').then(({ getOfflineRepos }) =>
-            getOfflineRepos().then(({ queueRepo }) => {
-              if (resolution === 'use_server') {
-                queueRepo.markSynced(entry.id);
-              }
-              // 'keep_mine' retries on next sync — leave as pending
-            }),
-          );
+          void getOfflineRepos().then(({ queueRepo }) => {
+            if (resolution === 'use_server') {
+              queueRepo.markSynced(entry.id);
+            }
+            // 'keep_mine' retries on next sync — leave as pending
+          });
           setSyncConflicts((prev) => prev.filter((c) => c.entry.id !== entry.id));
         }}
         onDismiss={() => setSyncConflicts([])}

@@ -22,17 +22,30 @@ export interface JwtClaims {
   iat: number;
 }
 
+function isJwtClaims(v: unknown): v is JwtClaims {
+  if (!v || typeof v !== 'object') return false;
+  const obj = v as Record<string, unknown>;
+  return (
+    typeof obj['sub'] === 'string' &&
+    typeof obj['tenantId'] === 'string' &&
+    typeof obj['email'] === 'string' &&
+    typeof obj['role'] === 'string' &&
+    typeof obj['exp'] === 'number'
+  );
+}
+
 export function decodeJwt(token: string): JwtClaims {
   const parts = token.split('.');
   if (parts.length !== 3 || !parts[1]) throw new Error('Invalid JWT format');
-  const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))) as unknown;
-  return payload as JwtClaims;
+  const raw = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))) as unknown;
+  if (!isJwtClaims(raw)) throw new Error('JWT payload missing required claims');
+  return raw;
 }
 
 export function isTokenExpired(token: string): boolean {
   try {
     const { exp } = decodeJwt(token);
-    return Date.now() / 1000 >= exp - 30; // 30s grace
+    return Date.now() / 1000 >= exp - 30; // 30s grace period
   } catch {
     return true;
   }

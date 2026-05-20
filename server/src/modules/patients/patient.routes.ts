@@ -10,47 +10,35 @@ import { authMiddleware } from '../auth/auth.middleware';
 export function createPatientRouter(store: InMemoryStore<PatientEntity>, broadcaster: EventBroadcaster): Router {
   const router = Router();
 
-  const getRepo = (tenantId: string) => new PatientRepository(store, tenantId);
-  const getService = (tenantId: string) => new PatientService(getRepo(tenantId));
+  // All patient routes require authentication — tenant isolation relies on req.ctx.tenantId
+  // which is populated exclusively by the verified JWT inside authMiddleware.
+  router.use(authMiddleware);
 
-  const ctrl = {
-    index: async (req: Request, res: Response) => {
-      const tenantId = String(req.query['tenantId'] ?? (req as Request & { ctx?: { tenantId: string } }).ctx?.tenantId ?? '');
-      const service = getService(tenantId);
-      const controller = new PatientController(service, broadcaster);
-      await controller.index(req, res);
-    },
-    export: async (req: Request, res: Response) => {
-      const tenantId = String(req.query['tenantId'] ?? (req as Request & { ctx?: { tenantId: string } }).ctx?.tenantId ?? '');
-      const service = getService(tenantId);
-      const controller = new PatientController(service, broadcaster);
-      await controller.export(req, res);
-    },
-    stream: async (req: Request, res: Response) => {
-      const tenantId = String(req.query['tenantId'] ?? '');
-      const service = getService(tenantId);
-      const controller = new PatientController(service, broadcaster);
-      await controller.stream(req, res);
-    },
-    show: async (req: Request, res: Response) => {
-      const tenantId = (req as Request & { ctx?: { tenantId: string } }).ctx?.tenantId ?? '';
-      const service = getService(tenantId);
-      const controller = new PatientController(service, broadcaster);
-      await controller.show(req, res);
-    },
-    patch: async (req: Request, res: Response) => {
-      const tenantId = (req as Request & { ctx?: { tenantId: string } }).ctx?.tenantId ?? '';
-      const service = getService(tenantId);
-      const controller = new PatientController(service, broadcaster);
-      await controller.patch(req, res);
-    },
+  const getController = (tenantId: string) => {
+    const repo = new PatientRepository(store, tenantId);
+    const service = new PatientService(repo);
+    return new PatientController(service, broadcaster);
   };
 
-  router.get('/stream', ctrl.stream); // before /:id so Express doesn't treat "stream" as an id
-  router.get('/export', ctrl.export); // before /:id so Express doesn't treat "export" as an id
-  router.get('/', ctrl.index);
-  router.get('/:id', authMiddleware, ctrl.show);
-  router.patch('/:id', authMiddleware, ctrl.patch);
+  router.get('/stream', (req: Request, res: Response) => {
+    void getController(req.ctx.tenantId).stream(req, res);
+  });
+
+  router.get('/export', (req: Request, res: Response) => {
+    void getController(req.ctx.tenantId).export(req, res);
+  });
+
+  router.get('/', (req: Request, res: Response) => {
+    void getController(req.ctx.tenantId).index(req, res);
+  });
+
+  router.get('/:id', (req: Request, res: Response) => {
+    void getController(req.ctx.tenantId).show(req, res);
+  });
+
+  router.patch('/:id', (req: Request, res: Response) => {
+    void getController(req.ctx.tenantId).patch(req, res);
+  });
 
   return router;
 }

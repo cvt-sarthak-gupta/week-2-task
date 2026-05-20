@@ -16,6 +16,14 @@ interface PatientRow {
   updated_at: number;
 }
 
+// Allowlist of Patient fields that can be used in ORDER BY.
+// This prevents SQL injection from user-supplied sort parameters.
+const SORTABLE_FIELDS = new Set<string>([
+  'id', 'mrn', 'firstName', 'lastName', 'dob', 'age', 'sex',
+  'status', 'ward', 'admittedAt', 'updatedAt', 'version',
+  'heartRate', 'o2sat', 'temp',
+]);
+
 export class PatientRepository {
   constructor(private readonly db: DbClient) {}
 
@@ -87,18 +95,17 @@ export class PatientRepository {
 
     let orderBy = 'updated_at DESC';
     if (filters.sort) {
-      const sortParts = filters.sort.split(',').map((s) => {
+      const sortParts = filters.sort.split(',').flatMap((s) => {
         const [field, dir] = s.split(':');
+        if (!field || !SORTABLE_FIELDS.has(field)) return [];
         const safeDir = (dir ?? 'ASC').toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-        if (field === 'updated_at') return `updated_at ${safeDir}`;
-        return `json_extract(data, '$.${field}') ${safeDir}`;
+        if (field === 'updatedAt') return [`updated_at ${safeDir}`];
+        return [`json_extract(data, '$.${field}') ${safeDir}`];
       });
-      orderBy = sortParts.join(', ');
+      if (sortParts.length > 0) orderBy = sortParts.join(', ');
     }
 
     if (filterFn) {
-      // AST filter can't be expressed as SQL — fetch all SQL-matching rows, apply
-      // filterFn in memory, then paginate the filtered list so counts are accurate.
       const allRows = this.db.query<PatientRow>(
         `SELECT * FROM patients WHERE ${where} ORDER BY ${orderBy}`,
         baseParams,

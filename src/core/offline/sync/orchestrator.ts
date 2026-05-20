@@ -23,27 +23,26 @@ export interface SyncDependencies {
   setLastSyncAt: (ts: number) => void;
 }
 
-let syncInProgress = false;
+// Per-tenant sync lock — prevents concurrent syncs for the same tenant while
+// allowing independent tenants (or test contexts) to sync simultaneously.
+const syncInProgress = new Map<string, boolean>();
 
 export async function runSync(deps: SyncDependencies): Promise<SyncResult> {
-  if (syncInProgress) return { updatedPatients: [], conflicts: [] };
-  syncInProgress = true;
+  if (syncInProgress.get(deps.tenantId)) return { updatedPatients: [], conflicts: [] };
+  syncInProgress.set(deps.tenantId, true);
   offlineStatusManager.setSyncing();
 
   const conflicts: SyncResult['conflicts'] = [];
 
   try {
-    // 1. Fetch server state since last sync
     const since = deps.getLastSyncAt();
     const serverPatients = await apiFetch<Patient[]>(`/patients?since=${since}&tenantId=${deps.tenantId}`);
 
-    // 2. Compute diff and apply minimal updates
     const local = deps.getLocalPatients();
     const diff = computeDiff(local, serverPatients);
     const updated = applyDiff(local, diff);
     deps.onPatientsUpdated(updated);
 
-    // 3. Replay offline queue in order
     const queue = deps.getPendingQueue();
     for (const entry of queue) {
       if (entry.retries >= MAX_QUEUE_RETRIES) continue;
@@ -63,7 +62,8 @@ export async function runSync(deps: SyncDependencies): Promise<SyncResult> {
             conflicts.push({ entry, meta: conflictMeta });
           }
         } else {
-          // Non-conflict error: increment retry counter and leave in queue for next sync
+          // Non-conflict error: increment retry counter, leave in queue for next sync
+          console.warn(`[sync] queue entry ${entry.id} failed (attempt ${entry.retries + 1}):`, err);
           deps.onEntryRetried?.(entry.id);
         }
       }
@@ -72,6 +72,6 @@ export async function runSync(deps: SyncDependencies): Promise<SyncResult> {
     deps.setLastSyncAt(Date.now());
     return { updatedPatients: updated, conflicts };
   } finally {
-    syncInProgress = false;
+    syncInProgress.set(deps.tenantId, false);
   }
 }

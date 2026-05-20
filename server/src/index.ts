@@ -1,5 +1,8 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
 import { createServer } from 'node:http';
 import { setupWebSocket } from './ws';
 import { createSseRouter } from './sse';
@@ -14,13 +17,37 @@ import { seedPatients } from './scripts/seed';
 const app = express();
 const httpServer = createServer(app);
 
-app.use(cors({ origin: /^http:\/\/localhost:\d+$/, credentials: true }));
-app.use(express.json());
+// --- Security headers ---
+app.use(helmet());
 
-// Setup WebSocket
+// --- CORS: explicit allowed origins from env in production ---
+const allowedOrigins = process.env['ALLOWED_ORIGINS']
+  ? process.env['ALLOWED_ORIGINS'].split(',').map((o) => o.trim())
+  : null;
+app.use(cors({
+  origin: allowedOrigins ?? /^http:\/\/localhost:\d+$/,
+  credentials: true,
+}));
+
+// --- Request logging ---
+app.use(morgan('combined'));
+
+// --- Body size limit (prevents large-payload DoS) ---
+app.use(express.json({ limit: '10kb' }));
+
+// --- Rate limiting on auth endpoints ---
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { status: 'error', message: 'Too many requests, please try again later.' },
+});
+
+// --- Setup WebSocket ---
 const broadcaster = setupWebSocket(httpServer);
 
-// SSE (shares broadcaster interface)
+// --- SSE (shares broadcaster interface) ---
 const sseRouter = createSseRouter();
 const combinedBroadcaster = {
   broadcast: (event: Parameters<typeof broadcaster.broadcast>[0]) => {
@@ -29,23 +56,23 @@ const combinedBroadcaster = {
   },
 };
 
-// Seed store
+// --- Seed store ---
 const patientStore = new InMemoryStore<PatientEntity>();
 seedPatients(patientStore);
 
-// Routes
-app.get('/healthz', (_req, res) => { res.status(200).send('ok'); });
-app.use('/auth', createAuthRouter());
+// --- Routes ---
+app.get('/healthz', (_req, res) => { res.status(200).json({ status: 'ok', ts: Date.now() }); });
+app.use('/auth', authLimiter, createAuthRouter());
 app.use('/', createPermissionsRouter());
 app.use('/patients', createPatientRouter(patientStore, combinedBroadcaster));
 app.use('/presets', createPresetsRouter());
 app.use('/', sseRouter);
 
-// Periodic vitals broadcaster — simulates live sensor data arriving from medical devices
+// --- Periodic vitals broadcaster — simulates live sensor data ---
 const VITALS_TENANTS = ['tenant-a', 'tenant-b', 'tenant-c'];
-const VITALS_PER_TICK = 15; // patients updated per interval across all tenants
+const VITALS_PER_TICK = 15;
 
-setInterval(() => {
+const vitalsInterval = setInterval(() => {
   const now = Date.now();
   for (const tenantId of VITALS_TENANTS) {
     const count = patientStore.count(tenantId);
@@ -60,7 +87,8 @@ setInterval(() => {
         id: `vitals-${now}-${tenantId}-${idx}`,
         type: 'vitals_updated',
         entityId,
-        version: 0,   // vitals bypass entity-version ordering on the client
+        tenantId, // required for tenant-scoped broadcast
+        version: 0,
         ts: now,
         payload: {
           heartRate: critical ? (40 + Math.floor(Math.random() * 80)) : (58 + Math.floor(Math.random() * 44)),
@@ -72,6 +100,20 @@ setInterval(() => {
     }
   }
 }, 1000);
+
+// --- Graceful shutdown ---
+function shutdown(): void {
+  console.log('\nGraceful shutdown: draining connections…');
+  clearInterval(vitalsInterval);
+  httpServer.close(() => {
+    console.log('HTTP server closed.');
+    process.exit(0);
+  });
+  // Force-exit after 10 s if connections don't drain
+  setTimeout(() => process.exit(1), 10_000);
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
 
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10);
 httpServer.listen(PORT, () => {

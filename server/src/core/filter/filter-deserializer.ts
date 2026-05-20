@@ -2,6 +2,9 @@ import type { FilterNode, CompareOp } from './filter-ast.types';
 
 type Token = { type: 'lparen' } | { type: 'rparen' } | { type: 'comma' } | { type: 'ident'; value: string };
 
+const VALID_COMPARE_OPS = new Set<string>(['eq', 'neq', 'contains', 'startsWith', 'gt', 'gte', 'lt', 'lte']);
+const VALID_STRUCTURAL_OPS = new Set<string>(['and', 'or', 'not', 'range']);
+
 function tokenize(input: string): Token[] {
   const tokens: Token[] = [];
   let i = 0;
@@ -77,6 +80,10 @@ class Parser {
       const inclusive: [boolean, boolean] = [flags[0] === '1', flags[1] === '1'];
       result = { kind: 'range', field, min: min as string | number, max: max as string | number, inclusive };
     } else {
+      // Validate that the operator is known before creating a compare node
+      if (!VALID_COMPARE_OPS.has(ident) && !VALID_STRUCTURAL_OPS.has(ident)) {
+        throw new Error(`Unknown filter operator: "${ident}"`);
+      }
       const op = ident as CompareOp;
       const field = this.expectIdent();
       this.expect('comma');

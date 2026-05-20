@@ -2,7 +2,6 @@ import type { PatientEntity } from './patient.entity';
 import type { PatientRepository } from './patient.repository';
 import type { PaginatedResult } from '../../core/interfaces/repository.interface';
 import { NotFoundError, ConflictError } from '../../core/errors/index';
-import { v4 as uuidv4 } from 'uuid';
 import { deserializeFilter } from '../../core/filter/filter-deserializer';
 import { evaluateFilter } from '../../core/filter/filter-evaluator';
 
@@ -24,12 +23,37 @@ export interface PatientFilterDto {
   filterAst?: string; // serialized FilterNode — takes precedence over flat params when present
 }
 
+type SortEntry = { field: string; dir: 'ASC' | 'DESC' };
+
 export class PatientService {
   constructor(private readonly repo: PatientRepository) {}
 
+  /** Parse "field:ASC,field2:DESC" into a structured sort list. */
+  private parseSortParts(sort: string): SortEntry[] {
+    return sort.split(',').flatMap((part) => {
+      const [field, dir] = part.split(':');
+      if (field && (dir === 'ASC' || dir === 'DESC')) return [{ field, dir }];
+      return [];
+    });
+  }
+
+  /** In-memory sort of an array of records using a structured sort list. */
+  private applySortParts<T extends Record<string, unknown>>(items: T[], sortParts: SortEntry[]): T[] {
+    if (sortParts.length === 0) return items;
+    return [...items].sort((a, b) => {
+      for (const { field, dir } of sortParts) {
+        const av = a[field];
+        const bv = b[field];
+        let cmp = 0;
+        if (typeof av === 'string' && typeof bv === 'string') cmp = av.localeCompare(bv);
+        else if (typeof av === 'number' && typeof bv === 'number') cmp = av - bv;
+        if (cmp !== 0) return dir === 'ASC' ? cmp : -cmp;
+      }
+      return 0;
+    });
+  }
+
   async findAll(page = 1, limit = 20, filters: PatientFilterDto = {}): Promise<PaginatedResult<PatientEntity>> {
-    // When a full AST filter is provided, evaluate it in-process against the full store
-    // and paginate the result ourselves (bypassing the simple where/search path).
     if (filters.filterAst) {
       return this.findAllByAst(page, limit, filters);
     }
@@ -38,16 +62,11 @@ export class PatientService {
     if (filters.status) where.status = filters.status as PatientEntity['status'];
     if (filters.ward) where.ward = filters.ward;
 
-    const order: Partial<Record<keyof PatientEntity, 'ASC' | 'DESC'>> = {};
-    if (filters.sort) {
-      for (const part of filters.sort.split(',')) {
-        const [field, dir] = part.split(':');
-        if (field && (dir === 'ASC' || dir === 'DESC')) {
-          order[field as keyof PatientEntity] = dir;
-        }
-      }
-    }
-    if (Object.keys(order).length === 0) order.updatedAt = 'DESC';
+    const sortParts = filters.sort ? this.parseSortParts(filters.sort) : [];
+    const order: Partial<Record<keyof PatientEntity, 'ASC' | 'DESC'>> =
+      sortParts.length > 0
+        ? Object.fromEntries(sortParts.map(({ field, dir }) => [field, dir])) as Partial<Record<keyof PatientEntity, 'ASC' | 'DESC'>>
+        : { updatedAt: 'DESC' };
 
     const search = filters.search
       ? { term: filters.search, fields: ['firstName', 'lastName', 'mrn'] as (keyof PatientEntity)[] }
@@ -70,35 +89,16 @@ export class PatientService {
       return { data: [], total: 0, page, limit, totalPages: 0 };
     }
 
-    let items = await this.repo.findAll({ page: 1, limit: Number.MAX_SAFE_INTEGER });
+    const items = await this.repo.findAll({ page: 1, limit: Number.MAX_SAFE_INTEGER });
     let matched = items.data.filter((p) => evaluateFilter(ast, p as unknown as Record<string, unknown>));
 
-    // Apply sort on top of AST results
     if (filters.sort) {
-      const sortParts: Array<{ field: string; dir: 'ASC' | 'DESC' }> = [];
-      for (const part of filters.sort.split(',')) {
-        const [field, dir] = part.split(':');
-        if (field && (dir === 'ASC' || dir === 'DESC')) sortParts.push({ field, dir });
-      }
-      if (sortParts.length > 0) {
-        matched = matched.sort((a, b) => {
-          for (const { field, dir } of sortParts) {
-            const av = (a as unknown as Record<string, unknown>)[field];
-            const bv = (b as unknown as Record<string, unknown>)[field];
-            let cmp = 0;
-            if (typeof av === 'string' && typeof bv === 'string') cmp = av.localeCompare(bv);
-            else if (typeof av === 'number' && typeof bv === 'number') cmp = av - bv;
-            if (cmp !== 0) return dir === 'ASC' ? cmp : -cmp;
-          }
-          return 0;
-        });
-      }
+      matched = this.applySortParts(matched as unknown as Record<string, unknown>[], this.parseSortParts(filters.sort)) as unknown as PatientEntity[];
     }
 
     const total = matched.length;
     const start = (page - 1) * limit;
-    const data = matched.slice(start, start + limit);
-    return { data, total, page, limit, totalPages: Math.ceil(total / limit) || 1 };
+    return { data: matched.slice(start, start + limit), total, page, limit, totalPages: Math.ceil(total / limit) || 1 };
   }
 
   async findById(id: string): Promise<PatientEntity> {
@@ -111,7 +111,6 @@ export class PatientService {
     return this.repo.findSince(since);
   }
 
-  /** Returns all patients matching the given filters — used by the export endpoint (no pagination). */
   async exportAll(filters: PatientFilterDto = {}): Promise<PatientEntity[]> {
     if (filters.filterAst) {
       let ast;
@@ -123,24 +122,7 @@ export class PatientService {
       const items = await this.repo.findAll({ page: 1, limit: Number.MAX_SAFE_INTEGER });
       let matched = items.data.filter((p) => evaluateFilter(ast, p as unknown as Record<string, unknown>));
       if (filters.sort) {
-        const sortParts: Array<{ field: string; dir: 'ASC' | 'DESC' }> = [];
-        for (const part of filters.sort.split(',')) {
-          const [field, dir] = part.split(':');
-          if (field && (dir === 'ASC' || dir === 'DESC')) sortParts.push({ field, dir });
-        }
-        if (sortParts.length > 0) {
-          matched = matched.sort((a, b) => {
-            for (const { field, dir } of sortParts) {
-              const av = (a as unknown as Record<string, unknown>)[field];
-              const bv = (b as unknown as Record<string, unknown>)[field];
-              let cmp = 0;
-              if (typeof av === 'string' && typeof bv === 'string') cmp = av.localeCompare(bv);
-              else if (typeof av === 'number' && typeof bv === 'number') cmp = av - bv;
-              if (cmp !== 0) return dir === 'ASC' ? cmp : -cmp;
-            }
-            return 0;
-          });
-        }
+        matched = this.applySortParts(matched as unknown as Record<string, unknown>[], this.parseSortParts(filters.sort)) as unknown as PatientEntity[];
       }
       return matched;
     }
@@ -149,16 +131,11 @@ export class PatientService {
     if (filters.status) where.status = filters.status as PatientEntity['status'];
     if (filters.ward) where.ward = filters.ward;
 
-    const order: Partial<Record<keyof PatientEntity, 'ASC' | 'DESC'>> = {};
-    if (filters.sort) {
-      for (const part of filters.sort.split(',')) {
-        const [field, dir] = part.split(':');
-        if (field && (dir === 'ASC' || dir === 'DESC')) {
-          order[field as keyof PatientEntity] = dir;
-        }
-      }
-    }
-    if (Object.keys(order).length === 0) order.updatedAt = 'DESC';
+    const sortParts = filters.sort ? this.parseSortParts(filters.sort) : [];
+    const order: Partial<Record<keyof PatientEntity, 'ASC' | 'DESC'>> =
+      sortParts.length > 0
+        ? Object.fromEntries(sortParts.map(({ field, dir }) => [field, dir])) as Partial<Record<keyof PatientEntity, 'ASC' | 'DESC'>>
+        : { updatedAt: 'DESC' };
 
     const search = filters.search
       ? { term: filters.search, fields: ['firstName', 'lastName', 'mrn'] as (keyof PatientEntity)[] }
@@ -174,7 +151,6 @@ export class PatientService {
     return result.data;
   }
 
-  /** Returns all patients sorted by updatedAt DESC — used by the NDJSON stream endpoint. */
   async findAllForStream(): Promise<PatientEntity[]> {
     const result = await this.repo.findAll({
       page: 1,
@@ -187,7 +163,6 @@ export class PatientService {
   async update(id: string, dto: UpdatePatientDto, expectedVersion?: number): Promise<PatientEntity> {
     const existing = await this.findById(id);
 
-    // Optimistic locking: if version is provided, verify
     if (expectedVersion !== undefined && existing.version !== expectedVersion) {
       throw new ConflictError(
         { serverVersion: existing.version, serverPayload: existing },
