@@ -7,13 +7,15 @@ vi.mock('@/core/workers/StreamWorkerClient', () => ({
 vi.mock('@/core/api/tokens', () => ({
   getAccessToken: vi.fn(() => 'fresh-token'),
 }));
-// SseTransport is mocked so tests can control the SSE transport instance
+// SseTransport and WebSocketTransport are mocked so tests can control transport instances
 vi.mock('./transport/SseTransport');
+vi.mock('./transport/WebSocketTransport');
 
 import { ConnectionManager } from './connectionManager';
 import type { ITransport, TransportState } from './transport/ITransport';
 import { streamWorkerClient } from '@/core/workers/StreamWorkerClient';
 import { SseTransport } from './transport/SseTransport';
+import { WebSocketTransport } from './transport/WebSocketTransport';
 import { getAccessToken } from '@/core/api/tokens';
 
 const mockSendEvent = vi.mocked(streamWorkerClient.sendEvent);
@@ -206,16 +208,20 @@ describe('ConnectionManager — heartbeat', () => {
 describe('ConnectionManager — SSE fallback', () => {
   let manager: ConnectionManager;
   let sseTx: ReturnType<typeof makeControllableTransport>;
+  let wsTx2: ReturnType<typeof makeControllableTransport>;
 
   beforeEach(() => {
     vi.useFakeTimers();
     sseTx = makeControllableTransport('sse');
+    wsTx2 = makeControllableTransport('websocket');
+    vi.mocked(WebSocketTransport).mockImplementation(() => wsTx2 as unknown as InstanceType<typeof WebSocketTransport>);
     manager = new ConnectionManager(sseTx as ITransport, true /* usingSse */);
   });
 
   afterEach(() => {
     manager.disconnect();
     vi.useRealTimers();
+    vi.clearAllMocks();
   });
 
   it('shows sse_fallback status when transport connects', () => {
@@ -246,16 +252,26 @@ describe('ConnectionManager — SSE fallback', () => {
     expect(manager.status).toBe('reconnecting');
   });
 
-  it('uses fresh token on SSE reconnect when available', () => {
-    manager.connect('http://localhost/sse', 'token');
+  it('re-attempts WebSocket (not SSE) when reconnecting from SSE fallback', () => {
+    manager.connect('ws://localhost', 'token');
     sseTx.fireState('connected');
-
-    vi.mocked(getAccessToken).mockReturnValueOnce('new-sse-token');
     sseTx.fireState('disconnected');
 
-    // Advance past max first-attempt reconnect jitter (1000ms)
     vi.advanceTimersByTime(1_001);
-    expect(sseTx.open).toHaveBeenLastCalledWith('http://localhost/sse', 'new-sse-token');
+    expect(manager.transportName).toBe('websocket');
+    // getAccessToken mock returns 'fresh-token', so reconnect uses the refreshed token
+    expect(wsTx2.open).toHaveBeenCalledWith('ws://localhost', 'fresh-token');
+  });
+
+  it('uses fresh token when re-upgrading to WebSocket after SSE fallback', () => {
+    manager.connect('ws://localhost', 'token');
+    sseTx.fireState('connected');
+
+    vi.mocked(getAccessToken).mockReturnValueOnce('new-token');
+    sseTx.fireState('disconnected');
+
+    vi.advanceTimersByTime(1_001);
+    expect(wsTx2.open).toHaveBeenCalledWith('ws://localhost', 'new-token');
   });
 });
 
@@ -263,11 +279,14 @@ describe('ConnectionManager — SSE fallback activation from WS failure', () => 
   let manager: ConnectionManager;
   let wsTx: ReturnType<typeof makeControllableTransport>;
   let sseTx: ReturnType<typeof makeControllableTransport>;
+  let wsTx2: ReturnType<typeof makeControllableTransport>;
 
   beforeEach(() => {
     vi.useFakeTimers();
     sseTx = makeControllableTransport('sse');
     vi.mocked(SseTransport).mockImplementation(() => sseTx as unknown as InstanceType<typeof SseTransport>);
+    wsTx2 = makeControllableTransport('websocket');
+    vi.mocked(WebSocketTransport).mockImplementation(() => wsTx2 as unknown as InstanceType<typeof WebSocketTransport>);
     wsTx = makeControllableTransport('websocket');
     manager = new ConnectionManager(wsTx as ITransport);
   });
@@ -278,11 +297,23 @@ describe('ConnectionManager — SSE fallback activation from WS failure', () => 
     vi.clearAllMocks();
   });
 
-  it('switches transport to SSE and sets sse_fallback status when WS fires failed', () => {
+  it('switches transport to SSE and sets sse_fallback status when WS fires failed (code 1008)', () => {
     manager.connect('ws://localhost', 'token');
     wsTx.fireState('failed');
     expect(manager.transportName).toBe('sse');
     expect(manager.status).toBe('sse_fallback');
+  });
+
+  it('reconnects to WebSocket (not SSE) when WS fires disconnected (network drop)', () => {
+    manager.connect('ws://localhost', 'token');
+    wsTx.fireState('connected');
+    wsTx.fireState('disconnected');
+    expect(manager.status).toBe('reconnecting');
+    vi.advanceTimersByTime(1_001);
+    // Should reopen the same WebSocket transport, not switch to SSE
+    expect(manager.transportName).toBe('websocket');
+    expect(wsTx.open).toHaveBeenCalledTimes(2); // initial connect + reconnect
+    expect(vi.mocked(SseTransport)).not.toHaveBeenCalled();
   });
 
   it('opens SSE on the same URL used for WS', () => {
@@ -323,5 +354,27 @@ describe('ConnectionManager — SSE fallback activation from WS failure', () => 
     sseTx.fireState('connected');
     vi.advanceTimersByTime(60_000);
     expect(sseTx.send).not.toHaveBeenCalled();
+  });
+
+  it('re-attempts WebSocket when SSE drops after a fallback, then falls back to SSE again if WS fails', () => {
+    // WS fails → SSE fallback
+    manager.connect('ws://localhost', 'token');
+    wsTx.fireState('failed');
+    sseTx.fireState('connected');
+    expect(manager.status).toBe('sse_fallback');
+
+    // SSE drops → reconnect should try WS again
+    sseTx.fireState('disconnected');
+    expect(manager.status).toBe('reconnecting');
+    vi.advanceTimersByTime(1_001);
+
+    expect(manager.transportName).toBe('websocket');
+    // getAccessToken mock returns 'fresh-token', so reconnect uses the refreshed token
+    expect(wsTx2.open).toHaveBeenCalledWith('ws://localhost', 'fresh-token');
+
+    // WS fails again → falls back to SSE once more
+    wsTx2.fireState('failed');
+    expect(manager.transportName).toBe('sse');
+    expect(manager.status).toBe('sse_fallback');
   });
 });

@@ -59,4 +59,15 @@ describe('ReconnectScheduler', () => {
     vi.advanceTimersByTime(5000);
     expect(fn).not.toHaveBeenCalled();
   });
+
+  it('second schedule() cancels the first — only one callback fires', () => {
+    const scheduler = new ReconnectScheduler({ baseMs: 1000, maxMs: 30000, factor: 2, jitter: false });
+    const fn1 = vi.fn();
+    const fn2 = vi.fn();
+    scheduler.schedule(fn1); // T1 pending
+    scheduler.schedule(fn2); // T1 cancelled, T2 pending
+    vi.advanceTimersByTime(5000);
+    expect(fn1).not.toHaveBeenCalled();
+    expect(fn2).toHaveBeenCalledOnce();
+  });
 });

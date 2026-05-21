@@ -24,6 +24,7 @@ export class ReconnectScheduler {
   }
 
   schedule(fn: () => void): void {
+    this.cancel(); // discard any pending timer before scheduling the next attempt
     const delay = computeBackoff(this.attempt, this.config);
     this.attempt++;
     this.timerId = setTimeout(fn, delay);

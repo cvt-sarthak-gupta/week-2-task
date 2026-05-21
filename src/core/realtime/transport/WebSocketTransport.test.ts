@@ -109,10 +109,18 @@ describe('WebSocketTransport — state transitions', () => {
     expect(t.state).toBe('failed');
   });
 
-  it('onerror fires → state becomes failed', () => {
+  it('onerror fires → state becomes disconnected (network error, not environment limitation)', () => {
     const t = new WebSocketTransport();
     t.open('ws://localhost', 'tok');
     wsInstances[0]!.simulateError();
+    expect(t.state).toBe('disconnected');
+  });
+
+  it('only onclose with code 1008 → state becomes failed (triggers SSE fallback)', () => {
+    const t = new WebSocketTransport();
+    t.open('ws://localhost', 'tok');
+    wsInstances[0]!.simulateOpen();
+    wsInstances[0]!.simulateClose(1008);
     expect(t.state).toBe('failed');
   });
 

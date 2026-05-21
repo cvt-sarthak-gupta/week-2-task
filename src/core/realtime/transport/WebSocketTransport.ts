@@ -35,8 +35,10 @@ export class WebSocketTransport implements ITransport {
     };
     ws.onerror = () => {
       if (this.ws !== ws) return; // stale handler — intentional close or reconnect already happened
+      // Network errors are transient — retry WebSocket rather than falling back to SSE.
+      // onerror is always followed by onclose, but this.ws = null makes that onclose a no-op.
       this.ws = null;
-      this.setState('failed');
+      this.setState('disconnected');
     };
     ws.onmessage = (e) => {
       if (typeof e.data === 'string') this.messageCbs.forEach((cb) => cb(e.data as string));

@@ -94,6 +94,16 @@ export class ConnectionManager {
         // Always use the latest token so a mid-session refresh doesn't break reconnects
         const fresh = getAccessToken();
         if (fresh) this.token = fresh;
+        if (this.usingSse) {
+          // Re-attempt WebSocket on reconnect; if WS fails again, handleTransportState
+          // will see state==='failed' && !usingSse and call switchToSse() automatically.
+          this.cleanups.forEach((fn) => fn());
+          this.cleanups = [];
+          this.transport.close();
+          this.transport = new WebSocketTransport();
+          this.usingSse = false;
+          this.bindTransport();
+        }
         this.transport.open(this.url, this.token);
       });
     }
