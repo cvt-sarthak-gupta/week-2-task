@@ -80,7 +80,6 @@ class Parser {
       const inclusive: [boolean, boolean] = [flags[0] === '1', flags[1] === '1'];
       result = { kind: 'range', field, min: min as string | number, max: max as string | number, inclusive };
     } else {
-      // Validate that the operator is known before creating a compare node
       if (!VALID_COMPARE_OPS.has(ident) && !VALID_STRUCTURAL_OPS.has(ident)) {
         throw new Error(`Unknown filter operator: "${ident}"`);
       }

@@ -4,7 +4,7 @@ export type QueueEntryStatus = 'pending' | 'synced' | 'conflict' | 'failed';
 export interface QueueEntry {
   readonly id: string;
   readonly tenantId: string;
-  readonly entity: string; // e.g. 'patient'
+  readonly entity: string;
   readonly entityId: string;
   readonly op: OpType;
   readonly payload: unknown;

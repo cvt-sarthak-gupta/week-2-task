@@ -76,7 +76,7 @@ export const handlers = [
     const url = new URL(request.url);
     const tenantId = url.searchParams.get('tenantId') ?? 'tenant-a';
     const since = url.searchParams.get('since') ?? '0';
-    void since; // acknowledged — may be used by real server for delta sync
+    void since;
     const TOTAL = 50000;
     const BATCH = 500;
     let generated = 0;

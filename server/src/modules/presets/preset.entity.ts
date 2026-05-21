@@ -3,7 +3,7 @@ export interface PresetEntity {
   tenantId: string;
   userId: string;
   name: string;
-  filterAst: string; // serialized FilterNode
+  filterAst: string;
   isShared: boolean;
   version: number;
   createdAt: number;

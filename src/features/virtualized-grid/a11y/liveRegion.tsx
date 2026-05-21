@@ -4,7 +4,6 @@ interface LiveRegionProps {
   updateCount: number;
 }
 
-/** Announces batched row updates to screen readers without spamming. */
 export function LiveRegion({ updateCount }: LiveRegionProps) {
   const [message, setMessage] = useState('');
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -17,7 +16,7 @@ export function LiveRegion({ updateCount }: LiveRegionProps) {
     timerRef.current = setTimeout(() => {
       setMessage(`${accumulatedRef.current} patient ${accumulatedRef.current === 1 ? 'record' : 'records'} updated`);
       accumulatedRef.current = 0;
-    }, 1000); // debounce announcements
+    }, 1000);
     return () => {
       if (timerRef.current !== null) clearTimeout(timerRef.current);
     };

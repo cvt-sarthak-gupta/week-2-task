@@ -45,17 +45,13 @@ export function FilterBar({
 }: FilterBarProps) {
   const [searchDraft, setSearchDraft] = useState(filters.search ?? '');
   const [builderOpen, setBuilderOpen] = useState(false);
-  // Local draft — only committed to URL when the user clicks "Apply"
   const [draftAst, setDraftAst] = useState<FilterNode | null>(currentFilterAst);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Keep search draft in sync with URL (e.g. after Clear All or preset load)
   useEffect(() => {
     setSearchDraft(filters.search ?? '');
   }, [filters.search]);
 
-  // Keep builder draft in sync when the applied filter changes externally
-  // (Clear All, preset load, browser back/forward)
   useEffect(() => {
     setDraftAst(currentFilterAst);
   }, [currentFilterAst]);
@@ -72,7 +68,6 @@ export function FilterBar({
   );
 
   const openBuilder = () => {
-    // Always start the draft from the currently applied filter
     setDraftAst(currentFilterAst);
     setBuilderOpen(true);
   };
@@ -83,7 +78,6 @@ export function FilterBar({
   };
 
   const handleBuilderCancel = () => {
-    // Discard draft, restore to applied state
     setDraftAst(currentFilterAst);
     setBuilderOpen(false);
   };
@@ -92,12 +86,8 @@ export function FilterBar({
 
   return (
     <>
-      {/* ---------------------------------------------------------------- */}
-      {/* Filter bar row                                                    */}
-      {/* ---------------------------------------------------------------- */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', flexWrap: 'wrap' }}>
 
-        {/* Simple filters — hidden while an advanced AST filter is active */}
         {!hasAstFilter && (
           <Input
             allowClear
@@ -134,7 +124,6 @@ export function FilterBar({
           />
         )}
 
-        {/* Indicator shown when an advanced AST filter is active */}
         {hasAstFilter && (
           <Tooltip title="Advanced filter active — click to edit">
             <Tag
@@ -148,7 +137,6 @@ export function FilterBar({
           </Tooltip>
         )}
 
-        {/* Advanced filter builder button */}
         <Button
           icon={<FilterOutlined aria-hidden />}
           onClick={openBuilder}
@@ -158,7 +146,6 @@ export function FilterBar({
           {hasAstFilter ? 'Edit filter' : 'Filter'}
         </Button>
 
-        {/* Clear all active filters */}
         {hasActiveFilters && (
           <Button
             icon={<ClearOutlined aria-hidden />}
@@ -192,10 +179,6 @@ export function FilterBar({
         </Space>
       </div>
 
-      {/* ---------------------------------------------------------------- */}
-      {/* Advanced filter builder — Modal (fully controlled, no trigger     */}
-      {/* conflict)                                                         */}
-      {/* ---------------------------------------------------------------- */}
       <Modal
         title="Advanced filter builder"
         open={builderOpen}

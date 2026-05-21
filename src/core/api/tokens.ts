@@ -1,10 +1,3 @@
-// Access token is kept exclusively in JavaScript memory — never written to
-// sessionStorage or localStorage. This eliminates the XSS attack surface:
-// a script injected via XSS cannot exfiltrate the token by reading Web Storage.
-//
-// Persistence across page refreshes is handled by the httpOnly refresh cookie.
-// On mount, AuthContext calls tryRefreshAccessToken() which silently re-issues
-// a new access token from the server using the cookie before the first API call.
 let _accessToken: string | null = null;
 
 export function getAccessToken(): string | null {
@@ -52,7 +45,7 @@ export function decodeJwt(token: string): JwtClaims {
 export function isTokenExpired(token: string): boolean {
   try {
     const { exp } = decodeJwt(token);
-    return Date.now() / 1000 >= exp - 30; // 30s grace period
+    return Date.now() / 1000 >= exp - 30;
   } catch {
     return true;
   }

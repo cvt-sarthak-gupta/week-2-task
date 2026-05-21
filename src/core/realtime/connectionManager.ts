@@ -34,7 +34,6 @@ export class ConnectionManager {
   connect(url: string, token: string): void {
     this.url = url;
     this.token = token;
-    // Re-bind listeners if they were cleared by a prior disconnect()
     if (this.cleanups.length === 0) {
       this.bindTransport();
     }
@@ -48,7 +47,6 @@ export class ConnectionManager {
     this.cleanups.forEach((fn) => fn());
     this.cleanups = [];
     this.transport.close();
-    // Reset to WebSocket so the next connect() re-attempts WS instead of going straight to SSE
     if (this.usingSse) {
       this.transport = new WebSocketTransport();
       this.usingSse = false;
@@ -83,7 +81,6 @@ export class ConnectionManager {
       return;
     }
     if (state === 'failed' && !this.usingSse) {
-      // WS failed → switch to SSE
       this.switchToSse();
       return;
     }
@@ -91,12 +88,9 @@ export class ConnectionManager {
       this.stopHeartbeat();
       this.setStatus('reconnecting');
       this.reconnect.schedule(() => {
-        // Always use the latest token so a mid-session refresh doesn't break reconnects
         const fresh = getAccessToken();
         if (fresh) this.token = fresh;
         if (this.usingSse) {
-          // Re-attempt WebSocket on reconnect; if WS fails again, handleTransportState
-          // will see state==='failed' && !usingSse and call switchToSse() automatically.
           this.cleanups.forEach((fn) => fn());
           this.cleanups = [];
           this.transport.close();
@@ -125,7 +119,7 @@ export class ConnectionManager {
     try {
       event = JSON.parse(raw) as ServerEvent;
     } catch {
-      return; // malformed — discard
+      return;
     }
 
     if (event.type === 'pong') {
@@ -133,21 +127,15 @@ export class ConnectionManager {
       return;
     }
 
-    // Forward to the stream worker for off-main-thread dedup, ordering, and batching.
-    // StreamWorkerClient falls back to main-thread processing if Workers are unavailable.
     streamWorkerClient.sendEvent(event as DataEvent);
   }
 
   private startHeartbeat(): void {
     this.stopHeartbeat();
-    // SSE auto-reconnects via EventSource; ping/pong is a no-op on that transport.
-    // Sending a ping with no pong response would trigger a false "connection dropped"
-    // detection every 20s — skip heartbeat entirely when on SSE.
     if (this.usingSse) return;
     this.heartbeatInterval = setInterval(() => {
       this.transport.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
       this.heartbeatTimeout = setTimeout(() => {
-        // No pong received — treat as dropped
         this.transport.close();
         this.setStatus('reconnecting');
         this.reconnect.schedule(() => {

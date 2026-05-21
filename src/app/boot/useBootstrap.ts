@@ -35,7 +35,6 @@ function saveConfigCache(config: PermissionSchema, version: string): void {
     localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(config));
     localStorage.setItem(CONFIG_VERSION_KEY, version);
   } catch {
-    // storage may be unavailable
   }
 }
 
@@ -48,7 +47,7 @@ export function useBootstrap(userId: string | null) {
       return res.config;
     },
     enabled: userId !== null,
-    staleTime: 5 * 60 * 1000, // 5 min — refetch on stale navigation
+    staleTime: 5 * 60 * 1000,
     placeholderData: () => loadCachedConfig() ?? DEFAULT_PERMISSION_SCHEMA,
     retry: 2,
   });

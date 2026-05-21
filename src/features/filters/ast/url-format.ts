@@ -1,34 +1,4 @@
-/**
- * Human-readable URL filter format.
- *
- * Designed to be copy-pasteable without percent-encoding for typical patient values.
- * Uses no characters that require URL-encoding in query string position.
- *
- * Grammar:
- *   expr     = group | leaf
- *   group    = ("and" | "or") "(" expr ("," expr)* ")"
- *            | "not" "(" expr ")"
- *   leaf     = field ":" op ":" value
- *            | field ":" "btwn" ":" min ":" max [":" flags]
- *   op       = "eq" | "ne" | "has" | "sw" | "gt" | "gte" | "lt" | "lte"
- *   flags    = "ii" | "ei" | "ie" | "ee"   (inclusive/exclusive per bound)
- *
- * Examples:
- *   status:eq:critical
- *   and(status:eq:critical,age:gte:65,ward:eq:ICU)
- *   or(status:eq:critical,status:eq:stable)
- *   not(age:lt:18)
- *   and(age:btwn:60:80,ward:eq:ICU)         ← both bounds inclusive (default)
- *   age:btwn:60:80:ei                        ← exclusive min, inclusive max
- *
- * Value escaping: literal "," → "\,", literal ")" → "\)", literal "\" → "\\"
- */
-
 import type { FilterNode, CompareOp, PatientField } from './types';
-
-// ---------------------------------------------------------------------------
-// Operator maps
-// ---------------------------------------------------------------------------
 
 const OP_TO_URL: Record<CompareOp, string> = {
   eq:         'eq',
@@ -52,10 +22,6 @@ const URL_TO_OP: Record<string, CompareOp> = {
   lte: 'lte',
 };
 
-// ---------------------------------------------------------------------------
-// Value encoding
-// ---------------------------------------------------------------------------
-
 function escapeVal(v: string): string {
   return v.replace(/[\\,)]/g, (c) => `\\${c}`);
 }
@@ -64,7 +30,6 @@ function unescapeVal(v: string): string {
   return v.replace(/\\([\\,)])/g, '$1');
 }
 
-/** Infer the typed value from a raw string — no explicit type prefix needed. */
 function inferValue(raw: string): string | number | boolean {
   const unescaped = unescapeVal(raw);
   if (unescaped === 'true') return true;
@@ -72,10 +37,6 @@ function inferValue(raw: string): string | number | boolean {
   if (unescaped.trim() !== '' && !isNaN(Number(unescaped))) return Number(unescaped);
   return unescaped;
 }
-
-// ---------------------------------------------------------------------------
-// Serializer
-// ---------------------------------------------------------------------------
 
 export function serializeUrl(node: FilterNode): string {
   switch (node.kind) {
@@ -97,10 +58,6 @@ export function serializeUrl(node: FilterNode): string {
     }
   }
 }
-
-// ---------------------------------------------------------------------------
-// Deserializer
-// ---------------------------------------------------------------------------
 
 export function deserializeUrl(input: string): FilterNode {
   const parser = new UrlParser(input);
@@ -145,22 +102,21 @@ class UrlParser {
       return { kind: 'not', child };
     }
 
-    // Leaf: field:op:...
     const field = word as PatientField;
     this.expect(':');
     const op = this.readWord();
 
     if (op === 'btwn') {
       this.expect(':');
-      const minRaw = this.readSegment(); // stops at ':' ',' ')'
+      const minRaw = this.readSegment();
       this.expect(':');
-      const maxRaw = this.readSegment(); // stops at ':' ',' ')'
+      const maxRaw = this.readSegment();
       let minInc = true;
       let maxInc = true;
       if (this.peekChar(':')) {
         this.consume();
-        const flags = this.readWord(); // "ii" "ei" "ie" "ee"
-        minInc = flags[0] !== 'e'; // readWord guarantees non-empty; undefined !== 'e' is true
+        const flags = this.readWord();
+        minInc = flags[0] !== 'e';
         maxInc = (flags[1] ?? 'i') !== 'e';
       }
       const min = inferValue(minRaw);
@@ -177,7 +133,7 @@ class UrlParser {
     const compareOp = URL_TO_OP[op];
     if (!compareOp) throw new Error(`Unknown operator "${op}"`);
     this.expect(':');
-    const valueRaw = this.readValue(); // stops at unescaped ',' ')'
+    const valueRaw = this.readValue();
     return {
       kind: 'compare',
       field,
@@ -186,7 +142,6 @@ class UrlParser {
     };
   }
 
-  /** Read letters/digits until a structural character. */
   private readWord(): string {
     const start = this.pos;
     while (this.pos < this.input.length) {
@@ -198,13 +153,11 @@ class UrlParser {
     return this.input.slice(start, this.pos);
   }
 
-  /** Read a range segment — stops at unescaped ':' ',' ')'. Returns raw escaped string. */
   private readSegment(): string {
     let s = '';
     while (this.pos < this.input.length) {
       const ch = this.input[this.pos]!;
       if (ch === '\\') {
-        // Preserve escape sequence intact so inferValue can unescape once
         s += ch; this.pos++;
         s += this.input[this.pos] ?? ''; this.pos++;
         continue;
@@ -216,13 +169,11 @@ class UrlParser {
     return s;
   }
 
-  /** Read a compare value — stops at unescaped ',' ')'. Returns raw escaped string. */
   private readValue(): string {
     let s = '';
     while (this.pos < this.input.length) {
       const ch = this.input[this.pos]!;
       if (ch === '\\') {
-        // Preserve escape sequence intact so inferValue can unescape once
         s += ch; this.pos++;
         s += this.input[this.pos] ?? ''; this.pos++;
         continue;

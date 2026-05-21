@@ -1,11 +1,10 @@
 import type { Patient, PatientStatus } from '@/shared/types';
 
-/** Every server event carries these fields for ordering + dedup. */
 interface BaseEvent {
-  readonly id: string; // unique event id for dedup
-  readonly entityId: string; // patient id
-  readonly version: number; // monotonic per-entity version
-  readonly ts: number; // server timestamp ms
+  readonly id: string;
+  readonly entityId: string;
+  readonly version: number;
+  readonly ts: number;
 }
 
 export interface VitalsUpdatedEvent extends BaseEvent {

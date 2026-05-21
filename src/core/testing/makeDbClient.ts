@@ -1,13 +1,5 @@
 import type { DbClient } from '../offline/db/client';
 
-/**
- * Returns a fully synchronous in-memory DbClient backed by a plain JS map,
- * usable in Vitest without WASM or OPFS. Supports the small SQL subset used
- * by PatientRepository and QueueRepository.
- *
- * Only supports the exact statements emitted by those repos — this is NOT a
- * general SQL engine. Add cases here when a new repo query pattern appears.
- */
 export function makeInMemoryDb(): DbClient & { _tables: Record<string, Record<string, unknown>[]> } {
   const tables: {
     patients: Record<string, unknown>[];
@@ -19,7 +11,7 @@ export function makeInMemoryDb(): DbClient & { _tables: Record<string, Record<st
     sync_meta: [],
   };
 
-  function execCreate(): void { /* no-op — tables pre-created above */ }
+  function execCreate(): void { }
 
   function runInsertPatient(params: readonly unknown[]): void {
     const [id, tenant_id, data, version, updated_at] = params as [string, string, string, number, number];
@@ -61,10 +53,6 @@ export function makeInMemoryDb(): DbClient & { _tables: Record<string, Record<st
       tables.sync_meta.push({ tenant_id, last_sync_at });
     }
   }
-
-  // -------------------------------------------------------------------------
-  // Patient filter helpers
-  // -------------------------------------------------------------------------
 
   function applyPatientFilters(
     sql: string,
@@ -112,14 +100,12 @@ export function makeInMemoryDb(): DbClient & { _tables: Record<string, Record<st
   function applySortFromSql(sql: string, rows: Record<string, unknown>[]): Record<string, unknown>[] {
     const match = sql.match(/ORDER BY (.+?) LIMIT/s);
     if (!match) {
-      // Default sort: updated_at DESC
       return [...rows].sort((a, b) => (b.updated_at as number) - (a.updated_at as number));
     }
 
     const orderByClause = match[1]!;
     const sortKeys: { field: string; dir: string }[] = [];
 
-    // Split on commas that are NOT inside parentheses
     const sortParts: string[] = [];
     let depth = 0;
     let current = '';
@@ -191,14 +177,12 @@ export function makeInMemoryDb(): DbClient & { _tables: Record<string, Record<st
     query<T>(sql: string, params: readonly unknown[] = []): T[] {
       if (sql.includes('FROM patients')) {
         if (sql.includes('LIMIT')) {
-          // Paged + filtered query from findFiltered
           const { rows: filtered, paramIdx } = applyPatientFilters(sql, params, tables.patients);
           const sorted = applySortFromSql(sql, filtered);
           const limit = params[paramIdx] as number;
           const offset = params[paramIdx + 1] as number;
           return sorted.slice(offset, offset + limit) as unknown as T[];
         }
-        // Non-paged query (findAll, findByStatus, etc.) — use applyPatientFilters for consistency
         const { rows: filtered } = applyPatientFilters(sql, params, tables.patients);
         const sorted = filtered.sort((a, b) => (b.updated_at as number) - (a.updated_at as number));
         return sorted as unknown as T[];
@@ -234,6 +218,6 @@ export function makeInMemoryDb(): DbClient & { _tables: Record<string, Record<st
       }
       return null;
     },
-    close(): void { /* no-op */ },
+    close(): void { },
   };
 }

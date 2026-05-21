@@ -10,7 +10,6 @@ const DEFAULT_CONFIG: BackoffConfig = { baseMs: 1000, maxMs: 30000, factor: 2, j
 export function computeBackoff(attempt: number, config: BackoffConfig = DEFAULT_CONFIG): number {
   const base = Math.min(config.baseMs * Math.pow(config.factor, attempt), config.maxMs);
   if (!config.jitter) return base;
-  // Full jitter: random value in [0, base]
   return Math.random() * base;
 }
 
@@ -24,7 +23,7 @@ export class ReconnectScheduler {
   }
 
   schedule(fn: () => void): void {
-    this.cancel(); // discard any pending timer before scheduling the next attempt
+    this.cancel();
     const delay = computeBackoff(this.attempt, this.config);
     this.attempt++;
     this.timerId = setTimeout(fn, delay);

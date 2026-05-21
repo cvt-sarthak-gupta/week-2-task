@@ -7,18 +7,8 @@ import { getOfflineRepos } from '@/core/offline/db/repos';
 import type { Patient, PaginatedResult } from '@/shared/types';
 import type { PatientUpdate } from '@/core/workers/protocol';
 
-// After this many ms of silence from the event stream, re-fetch so the
-// server-sorted order (updatedAt DESC) reflects recent in-place patches.
 const REFETCH_DEBOUNCE_MS = 2_000;
 
-/**
- * Subscribes to processed patient updates from the stream worker.
- * Patches the TanStack Query cache in-place (no re-fetch) and persists
- * each updated record to the offline SQLite store.
- *
- * A debounced invalidation fires after bursts settle so the server-side
- * sort order stays consistent without flooding the API.
- */
 export function useRealtimePatients(tenantId: string): void {
   const qc = useQueryClient();
   const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -66,8 +56,6 @@ export function useRealtimePatients(tenantId: string): void {
           void getOfflineRepos().then(({ patientRepo }) => patientRepo.upsert(tenantId, updated));
         }
       }
-      // Even when a batch only contains patients not yet in the cache, reschedule
-      // a refetch so newly-updated records rise to the top of the sorted view.
       if (updates.length > 0 || anyPatched) scheduleRefetch();
     });
 

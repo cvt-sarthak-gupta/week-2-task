@@ -11,7 +11,7 @@ interface LoginCredentials {
 interface AuthContextValue {
   readonly user: User | null;
   readonly isAuthenticated: boolean;
-  readonly isBootstrapping: boolean; // true while we're attempting a silent refresh on mount
+  readonly isBootstrapping: boolean;
   login: (creds: LoginCredentials) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -42,8 +42,6 @@ function userFromToken(token: string): User | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  // isBootstrapping stays true until the silent refresh attempt settles (success or failure).
-  // This prevents a flash of the login page on authenticated page loads.
   const [isBootstrapping, setIsBootstrapping] = useState(true);
 
   const clearSession = useCallback(() => {
@@ -51,14 +49,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  // On mount: silently attempt to get a new access token using the httpOnly refresh cookie.
-  // If it succeeds, the user is restored without a login screen.
-  // If it fails (no cookie, expired, or network error), we land on the login page.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      // If a valid in-memory token already exists (impossible on cold load, but possible
-      // in unit tests or hot-reload scenarios), skip the network round-trip.
       const existing = getAccessToken();
       if (existing && !isTokenExpired(existing)) {
         const restored = userFromToken(existing);
@@ -74,10 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setAccessToken(data.accessToken);
             setUser(userFromToken(data.accessToken));
           }
-          // On failure (401, network error) we simply stay logged out — no error shown
         }
       } catch {
-        // Network unavailable — stay logged out
       } finally {
         if (!cancelled) setIsBootstrapping(false);
       }

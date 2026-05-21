@@ -5,7 +5,6 @@ import type { PresetEntity } from './preset.entity';
 import { PresetService } from './preset.service';
 import { BaseController } from '../../core/base/base.controller';
 
-// Store is injected here — can be swapped in tests
 const store = new InMemoryStore<PresetEntity>();
 const service = new PresetService(store);
 

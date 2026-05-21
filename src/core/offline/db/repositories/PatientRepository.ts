@@ -5,7 +5,7 @@ export interface OfflinePatientFilters {
   status?: string;
   ward?: string;
   search?: string;
-  sort?: string; // "field:ASC,field2:DESC"
+  sort?: string;
 }
 
 interface PatientRow {
@@ -16,8 +16,6 @@ interface PatientRow {
   updated_at: number;
 }
 
-// Allowlist of Patient fields that can be used in ORDER BY.
-// This prevents SQL injection from user-supplied sort parameters.
 const SORTABLE_FIELDS = new Set<string>([
   'id', 'mrn', 'firstName', 'lastName', 'dob', 'age', 'sex',
   'status', 'ward', 'admittedAt', 'updatedAt', 'version',

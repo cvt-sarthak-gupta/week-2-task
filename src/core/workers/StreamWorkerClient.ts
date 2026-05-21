@@ -5,14 +5,6 @@ import { eventBus } from '../realtime/eventBus';
 
 type BatchCb = (updates: readonly PatientUpdate[]) => void;
 
-/**
- * Wraps stream.worker.ts. Sends raw DataEvents to the worker for off-main-thread
- * dedup, out-of-order reconciliation, and batching. Falls back to main-thread
- * processing if Workers are unavailable.
- *
- * Incoming batch_update messages are accumulated and flushed once per animation
- * frame so the UI is updated at most 60fps regardless of event burst rate.
- */
 export class StreamWorkerClient {
   private worker: Worker | null = null;
   private fallbackLogic: StreamWorkerLogic | null = null;
@@ -50,12 +42,10 @@ export class StreamWorkerClient {
       this.worker.postMessage(msg);
       return;
     }
-    // Fallback: process on main thread, then flush as a batch
     if (this.fallbackLogic) {
       this.fallbackLogic.processEvent(event);
       this.scheduleFallbackFlush();
     } else {
-      // Nothing initialized yet — publish directly to bus so events aren't lost
       eventBus.publish(event);
     }
   }
@@ -69,7 +59,6 @@ export class StreamWorkerClient {
     }
   }
 
-  /** Subscribe to processed batch updates. Returns an unsubscribe function. */
   onBatch(cb: BatchCb): () => void {
     this.batchCbs.add(cb);
     return () => this.batchCbs.delete(cb);
@@ -112,7 +101,6 @@ export class StreamWorkerClient {
       this.fallbackFlushId = null;
       if (!this.fallbackLogic?.hasPending()) return;
       const updates = this.fallbackLogic.flushBatch();
-      // Route through the same RAF buffer so the fallback path also stays at 60fps
       this.pendingUpdates.push(...updates);
       this.scheduleRafFlush();
     }, 0);
@@ -121,12 +109,10 @@ export class StreamWorkerClient {
   private handleWorkerMessage(msg: WorkerResponse): void {
     switch (msg.type) {
       case 'batch_update':
-        // Accumulate updates and flush via RAF to cap UI updates at 60fps
         this.pendingUpdates.push(...msg.updates);
         this.scheduleRafFlush();
         break;
       case 'passthrough_event':
-        // Non-patient events (vitals, alerts) come back through the event bus
         eventBus.publish(msg.event);
         break;
       case 'ready':

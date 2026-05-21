@@ -26,7 +26,6 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
     case 'raw_event': {
       const event = req.payload as DataEvent;
 
-      // Passthrough non-patient events so the main thread can handle them
       if (
         event.type === 'order_changed' ||
         event.type === 'alert_raised'
@@ -39,7 +38,6 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
 
       if (!rafScheduled && logic.hasPending()) {
         rafScheduled = true;
-        // Workers don't have requestAnimationFrame — use setTimeout(0) to batch within the same tick
         setTimeout(flushBatch, 0);
       }
       break;

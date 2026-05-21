@@ -6,10 +6,9 @@ export type FieldType = 'string' | 'number' | 'enum' | 'date';
 export interface FieldMeta {
   readonly label: string;
   readonly type: FieldType;
-  readonly options?: readonly string[]; // for enum fields
+  readonly options?: readonly string[];
 }
 
-/** Filterable patient fields with UI metadata. Internal/system fields excluded. */
 export const FILTERABLE_FIELDS: readonly { field: PatientField; meta: FieldMeta }[] = [
   { field: 'mrn',        meta: { label: 'MRN',           type: 'string' } },
   { field: 'firstName',  meta: { label: 'First Name',    type: 'string' } },

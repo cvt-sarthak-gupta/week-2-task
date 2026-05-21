@@ -3,14 +3,6 @@ import { Filter } from './types';
 import type { Patient } from '@/shared/types';
 import { exhaustiveCheck } from '@/shared/utils/assert';
 
-/**
- * Serializes a FilterNode to a compact, URL-safe string.
- * Values are type-prefixed to preserve round-trip fidelity:
- *   s:alice  → string "alice"
- *   n:65     → number 65
- *   b:true   → boolean true
- * e.g. and(eq(status,s:critical),gte(age,n:65))
- */
 export function serialize(node: FilterNode): string {
   switch (node.kind) {
     case 'and':
@@ -23,7 +15,6 @@ export function serialize(node: FilterNode): string {
       return `${node.op}(${node.field},${encodeTypedValue(node.value)})`;
     case 'range':
       return `range(${node.field},${encodeTypedValue(node.min)},${encodeTypedValue(node.max)},${node.inclusive[0] ? '1' : '0'}${node.inclusive[1] ? '1' : '0'})`;
-    /* v8 ignore next 2 */
     default:
       return exhaustiveCheck(node);
   }
@@ -42,10 +33,7 @@ function encodeTypedValue(v: string | number | boolean): string {
 function decodeTypedValue(raw: string): string | number | boolean {
   if (raw.startsWith('b:')) return raw.slice(2) === 'true';
   if (raw.startsWith('n:')) return Number(raw.slice(2));
-  // The tokenizer already strips backslash escapes before passing raw here —
-  // calling unescapeStr again would double-unescape (e.g. "\(" → "(").
   if (raw.startsWith('s:')) return raw.slice(2);
-  // Legacy fallback for values without type prefix
   return raw === 'true' ? true : raw === 'false' ? false : (raw.trim() !== '' && !isNaN(Number(raw))) ? Number(raw) : raw;
 }
 
@@ -117,11 +105,9 @@ class Parser {
       const inclusive: [boolean, boolean] = [flags[0] === '1', flags[1] === '1'];
       result = Filter.range(field, min as string | number, max as string | number, inclusive);
     } else {
-      // compare node: op(field,value)
       const op = ident as CompareOp;
       const field = this.expectIdent() as keyof Patient;
       this.expect('comma');
-      // expectValueIdent allows empty string values (next token is ')' when value is "")
       const value = decodeTypedValue(this.expectValueIdent());
       result = { kind: 'compare', field, op, value: value as string | number | boolean };
     }
@@ -137,9 +123,8 @@ class Parser {
     return t.value;
   }
 
-  /** Like expectIdent but returns the type-prefix sentinel for empty string when the next token is ')'. */
   private expectValueIdent(): string {
-    if (this.peek('rparen')) return 's:'; // empty string encoded as "s:" with no body
+    if (this.peek('rparen')) return 's:';
     return this.expectIdent();
   }
 

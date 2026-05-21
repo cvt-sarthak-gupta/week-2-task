@@ -18,11 +18,9 @@ const FEATURE_FLAGS_BY_TENANT: Record<string, typeof DEFAULT_FLAGS> = {
 export function createPermissionsRouter(): Router {
   const router = Router();
 
-  // Use the shared authMiddleware — no re-implementation of JWT verification
   router.get('/me/config', authMiddleware, (req, res) => {
     const { tenantId, currentUser } = req.ctx;
 
-    // Capabilities come from the verified JWT claims embedded during login
     const capabilities = (req.headers.authorization
       ? (() => {
           try {

@@ -1,7 +1,3 @@
-/**
- * Fenwick tree (Binary Indexed Tree) for O(log n) cumulative height queries.
- * Enables fast scrollTop → row index lookups and totalHeight calculations.
- */
 export class RowSizeManager {
   private readonly tree: number[];
   private readonly sizes: number[];
@@ -13,7 +9,6 @@ export class RowSizeManager {
     this.defaultSize = defaultSize;
     this.sizes = new Array<number>(count).fill(defaultSize);
     this.tree = new Array<number>(count + 1).fill(0);
-    // Build tree
     for (let i = 0; i < count; i++) {
       this.updateTree(i + 1, defaultSize);
     }
@@ -35,7 +30,6 @@ export class RowSizeManager {
     return this.sizes[index] ?? this.defaultSize;
   }
 
-  /** Cumulative height from row 0 up to (not including) `index`. */
   getOffset(index: number): number {
     if (index <= 0) return 0;
     return this.prefixSum(Math.min(index, this._count));
@@ -45,10 +39,8 @@ export class RowSizeManager {
     return this.prefixSum(this._count);
   }
 
-  /** Find the row index for a given scrollTop using binary search over prefix sums. */
   findIndex(scrollTop: number): number {
     if (scrollTop <= 0) return 0;
-    // Walk the Fenwick tree in O(log n)
     let idx = 0;
     let remaining = scrollTop;
     let bitMask = this.highestBit(this._count);
@@ -71,10 +63,6 @@ export class RowSizeManager {
       for (let i = old; i < newCount; i++) {
         this.sizes[i] = this.defaultSize;
       }
-      // Rebuild the Fenwick tree from scratch. An incremental approach would
-      // corrupt shared higher-level nodes that span both existing and new rows
-      // (e.g. tree[8] covers rows 0-7 and must incorporate all of them). A
-      // full rebuild is O(n log n) but always correct.
       this.tree.length = newCount + 1;
       this.tree.fill(0);
       for (let i = 0; i < newCount; i++) {

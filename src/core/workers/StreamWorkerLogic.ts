@@ -4,17 +4,12 @@ import type { PatientUpdate } from './protocol';
 
 const DEDUP_CACHE_SIZE = 2000;
 
-/**
- * Pure stateful class — extracted from stream.worker.ts so it can be unit-tested
- * without requiring a Worker execution context.
- */
 export class StreamWorkerLogic {
   private readonly dedupCache: string[] = [];
   private readonly dedupSet = new Set<string>();
   private readonly entityVersions = new Map<string, number>();
   private pendingBatch: PatientUpdate[] = [];
 
-  /** Returns true if the id is new (not a duplicate). */
   addToDedup(id: string): boolean {
     if (this.dedupSet.has(id)) return false;
     this.dedupSet.add(id);
@@ -26,16 +21,10 @@ export class StreamWorkerLogic {
     return true;
   }
 
-  /**
-   * Process a DataEvent. Skips duplicates and (for non-vitals) out-of-order events.
-   * Queues a PatientUpdate for patient_updated, status_changed, and vitals_updated events.
-   */
   processEvent(event: DataEvent): void {
     if (!('id' in event)) return;
     if (!this.addToDedup(event.id)) return;
 
-    // Vitals are independent sensor readings — they don't track patient entity version.
-    // Bypassing the version gate lets every fresh sensor reading reach the UI.
     if (event.type === 'vitals_updated') {
       this.pendingBatch.push({
         id: event.entityId,
@@ -65,8 +54,6 @@ export class StreamWorkerLogic {
         break;
       case 'order_changed':
       case 'alert_raised':
-        // These event types don't mutate the patient row — they are surfaced
-        // as passthrough events so the main thread can handle them separately.
         break;
       default:
         break;
@@ -85,7 +72,6 @@ export class StreamWorkerLogic {
     }
   }
 
-  /** Drains and returns the pending batch. Resets internal buffer. */
   flushBatch(): PatientUpdate[] {
     const updates = this.pendingBatch;
     this.pendingBatch = [];
@@ -96,7 +82,6 @@ export class StreamWorkerLogic {
     return this.pendingBatch.length > 0;
   }
 
-  /** Seed entity versions from existing dataset so stale events are rejected. */
   initVersions(patients: readonly { id: string; version: number }[]): void {
     for (const p of patients) {
       this.entityVersions.set(p.id, p.version);

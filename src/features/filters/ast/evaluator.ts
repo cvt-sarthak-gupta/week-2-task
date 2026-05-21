@@ -26,7 +26,6 @@ function compareValues(op: CompareNode['op'], fieldVal: unknown, compareVal: str
       return Number(fieldVal) < Number(compareVal);
     case 'lte':
       return Number(fieldVal) <= Number(compareVal);
-    /* v8 ignore next 2 */
     default:
       return exhaustiveCheck(op);
   }
@@ -43,7 +42,6 @@ function evaluateRange(node: RangeNode, patient: Patient): boolean {
   return passMin && passMax;
 }
 
-/** Pure evaluator — no side effects. 100% branch coverage required. */
 export function evaluate(node: FilterNode, patient: Patient): boolean {
   switch (node.kind) {
     case 'and':
@@ -58,7 +56,6 @@ export function evaluate(node: FilterNode, patient: Patient): boolean {
       return compareValues(node.op, getField(patient, node.field), node.value);
     case 'range':
       return evaluateRange(node, patient);
-    /* v8 ignore next 2 */
     default:
       return exhaustiveCheck(node);
   }

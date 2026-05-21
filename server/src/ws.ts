@@ -7,7 +7,7 @@ export interface ServerEventPayload {
   id: string;
   type: string;
   entityId: string;
-  tenantId: string; // required for tenant-scoped broadcast
+  tenantId: string;
   version: number;
   ts: number;
   payload: unknown;
@@ -17,7 +17,6 @@ export interface EventBroadcaster {
   broadcast(event: ServerEventPayload): void;
 }
 
-// Augment WebSocket with tenant context set at authentication time
 interface AuthenticatedSocket extends WebSocket {
   tenantId?: string;
 }
@@ -47,7 +46,6 @@ export function setupWebSocket(httpServer: Server): EventBroadcaster {
           ws.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
         }
       } catch {
-        // ignore malformed messages
       }
     });
   });
@@ -57,7 +55,6 @@ export function setupWebSocket(httpServer: Server): EventBroadcaster {
       const payload = JSON.stringify(event);
       for (const client of wss.clients) {
         const sock = client as AuthenticatedSocket;
-        // Only send to clients belonging to the same tenant as the event
         if (sock.readyState === 1 && sock.tenantId === event.tenantId) {
           sock.send(payload);
         }

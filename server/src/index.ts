@@ -17,10 +17,8 @@ import { seedPatients } from './scripts/seed';
 const app = express();
 const httpServer = createServer(app);
 
-// --- Security headers ---
 app.use(helmet());
 
-// --- CORS: explicit allowed origins from env in production ---
 const allowedOrigins = process.env['ALLOWED_ORIGINS']
   ? process.env['ALLOWED_ORIGINS'].split(',').map((o) => o.trim())
   : null;
@@ -29,25 +27,20 @@ app.use(cors({
   credentials: true,
 }));
 
-// --- Request logging ---
 app.use(morgan('combined'));
 
-// --- Body size limit (prevents large-payload DoS) ---
 app.use(express.json({ limit: '10kb' }));
 
-// --- Rate limiting on auth endpoints ---
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { status: 'error', message: 'Too many requests, please try again later.' },
 });
 
-// --- Setup WebSocket ---
 const broadcaster = setupWebSocket(httpServer);
 
-// --- SSE (shares broadcaster interface) ---
 const sseRouter = createSseRouter();
 const combinedBroadcaster = {
   broadcast: (event: Parameters<typeof broadcaster.broadcast>[0]) => {
@@ -56,11 +49,9 @@ const combinedBroadcaster = {
   },
 };
 
-// --- Seed store ---
 const patientStore = new InMemoryStore<PatientEntity>();
 seedPatients(patientStore);
 
-// --- Routes ---
 app.get('/healthz', (_req, res) => { res.status(200).json({ status: 'ok', ts: Date.now() }); });
 app.use('/auth', authLimiter, createAuthRouter());
 app.use('/', createPermissionsRouter());
@@ -68,7 +59,6 @@ app.use('/patients', createPatientRouter(patientStore, combinedBroadcaster));
 app.use('/presets', createPresetsRouter());
 app.use('/', sseRouter);
 
-// --- Periodic vitals broadcaster — simulates live sensor data ---
 const VITALS_TENANTS = ['tenant-a', 'tenant-b', 'tenant-c'];
 const VITALS_PER_TICK = 15;
 
@@ -87,7 +77,7 @@ const vitalsInterval = setInterval(() => {
         id: `vitals-${now}-${tenantId}-${idx}`,
         type: 'vitals_updated',
         entityId,
-        tenantId, // required for tenant-scoped broadcast
+        tenantId,
         version: 0,
         ts: now,
         payload: {
@@ -101,7 +91,6 @@ const vitalsInterval = setInterval(() => {
   }
 }, 1000);
 
-// --- Graceful shutdown ---
 function shutdown(): void {
   console.log('\nGraceful shutdown: draining connections…');
   clearInterval(vitalsInterval);
@@ -109,7 +98,6 @@ function shutdown(): void {
     console.log('HTTP server closed.');
     process.exit(0);
   });
-  // Force-exit after 10 s if connections don't drain
   setTimeout(() => process.exit(1), 10_000);
 }
 process.on('SIGTERM', shutdown);

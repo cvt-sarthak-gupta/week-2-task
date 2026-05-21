@@ -5,9 +5,6 @@ import { NotFoundError, ConflictError } from '../../core/errors/index';
 import { deserializeFilter } from '../../core/filter/filter-deserializer';
 import { evaluateFilter } from '../../core/filter/filter-evaluator';
 
-// Hard cap on the number of records loaded into memory for in-process AST filtering
-// and unbounded exports. Prevents accidental OOM on unexpectedly large datasets.
-// A real DB-backed implementation would replace this with cursor-based streaming.
 const IN_MEMORY_RECORD_CAP = 100_000;
 
 export interface UpdatePatientDto {
@@ -24,8 +21,8 @@ export interface PatientFilterDto {
   status?: string;
   ward?: string;
   search?: string;
-  sort?: string;   // "field:ASC|DESC,field2:ASC|DESC"
-  filterAst?: string; // serialized FilterNode — takes precedence over flat params when present
+  sort?: string;
+  filterAst?: string;
 }
 
 type SortEntry = { field: string; dir: 'ASC' | 'DESC' };
@@ -33,7 +30,6 @@ type SortEntry = { field: string; dir: 'ASC' | 'DESC' };
 export class PatientService {
   constructor(private readonly repo: PatientRepository) {}
 
-  /** Parse "field:ASC,field2:DESC" into a structured sort list. */
   private parseSortParts(sort: string): SortEntry[] {
     return sort.split(',').flatMap((part) => {
       const [field, dir] = part.split(':');
@@ -42,7 +38,6 @@ export class PatientService {
     });
   }
 
-  /** In-memory sort of an array of records using a structured sort list. */
   private applySortParts<T extends Record<string, unknown>>(items: T[], sortParts: SortEntry[]): T[] {
     if (sortParts.length === 0) return items;
     return [...items].sort((a, b) => {

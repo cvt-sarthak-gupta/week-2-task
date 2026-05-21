@@ -12,7 +12,7 @@ interface RowProps {
   onSelect: (id: string) => void;
   measureRef: (el: HTMLDivElement | null) => void;
   expansionSlot?: ReactNode;
-  rowIndex: number; // 1-based for aria-rowindex
+  rowIndex: number;
 }
 
 export const Row = memo(function Row({
@@ -30,7 +30,6 @@ export const Row = memo(function Row({
 }: RowProps) {
   const ref = useRef<HTMLDivElement>(null);
 
-  // Track focus
   useEffect(() => {
     if (isFocused && ref.current) ref.current.focus({ preventScroll: true });
   }, [isFocused]);
@@ -67,9 +66,7 @@ export const Row = memo(function Row({
       }}
       onClick={() => onSelect(patient.id)}
     >
-      {/* Cell row — horizontal flex */}
       <div style={{ display: 'flex' }}>
-        {/* Frozen columns */}
         <div style={{ display: 'flex', position: 'sticky', left: 0, zIndex: 1, background: rowBg, boxShadow: '3px 0 6px -2px rgba(0,0,0,0.18)' }}>
           {frozenCols.map((col) => (
             <div
@@ -82,7 +79,6 @@ export const Row = memo(function Row({
             </div>
           ))}
         </div>
-        {/* Scrollable columns */}
         {scrollCols.map((col) => (
           <div
             key={col.field}
@@ -95,7 +91,6 @@ export const Row = memo(function Row({
         ))}
       </div>
 
-      {/* Expansion panel — in-flow so the row's measured height includes it */}
       {isExpanded && expansionSlot}
     </div>
   );

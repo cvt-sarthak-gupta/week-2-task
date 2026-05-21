@@ -1,5 +1,3 @@
-/** Typed SQL strings for SQLite schema creation. Applied by the migration runner. */
-
 export const MIGRATION_0001 = `
 CREATE TABLE IF NOT EXISTS _meta_migrations (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

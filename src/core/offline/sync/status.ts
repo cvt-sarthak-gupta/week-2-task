@@ -5,7 +5,6 @@ export type OfflineStatus = 'online' | 'offline' | 'syncing';
 const HEALTH_CHECK_URL = '/api/healthz';
 const HEALTH_CHECK_INTERVAL_MS = 30_000;
 
-/** More reliable than navigator.onLine alone — also does a HEAD probe. */
 async function isReachable(): Promise<boolean> {
   try {
     const res = await fetch(HEALTH_CHECK_URL, { method: 'HEAD', cache: 'no-store' });

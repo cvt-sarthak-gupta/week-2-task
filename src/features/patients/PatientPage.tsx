@@ -85,36 +85,25 @@ export default function PatientPage() {
 
   const serverRows = useMemo(() => deduplicateById(data?.pages.flatMap((p) => p.data) ?? []), [data]);
 
-  // Map for O(1) lookup during merge
   const localById = useMemo(() => new Map(serverRows.map((p) => [p.id, p])), [serverRows]);
 
-  // Client-side filter worker result (null = no filter active / result pending)
   const [workerFilterIds, setWorkerFilterIds] = useState<ReadonlySet<string> | null>(null);
   useFilterWorker(serverRows, filters, setWorkerFilterIds);
 
-  // Unified rows: client-filtered IDs first (instant, in-memory), then new server-only records.
-  // Both sources share the same filter so there are no duplicate results.
   const rows = useMemo(() => {
     const hasFilter = buildFilterAst(filters) !== null;
     if (!hasFilter) return serverRows;
-    // Worker result is still pending for this filter — show server data as-is while worker catches up
     if (workerFilterIds === null) return serverRows;
     const clientIds = Array.from(workerFilterIds).filter((id) => localById.has(id));
     return mergeResults(clientIds, serverRows, localById);
   }, [serverRows, workerFilterIds, localById, filters]);
 
-  // What to show in the "X of Y records" label — must be stable and accurate.
-  // Unfiltered: use the server-reported total from the viewport fetch; it's a
-  // single COUNT from the server and never changes mid-session.
-  // Filtered: use SQLite's filtered count (the only source of truth for filters).
   const displayTotal = hasActiveFilters ? (data?.pages[0]?.total ?? serverRows.length) : (bootstrap.serverTotal ?? data?.pages[0]?.total ?? serverRows.length);
 
-  // Scrollbar reflects only loaded rows in all cases — grows as pages load.
   const virtualizerTotal = rows.length;
 
   const sortState = useMemo(() => sortParamToState(filters.sort), [filters.sort]);
 
-  // Changes whenever the active filter set changes (not sort) — used to scroll grid to top.
   const filterScrollKey = `${filters.status ?? ''}_${filters.ward ?? ''}_${filters.search ?? ''}_${filters.filter ?? ''}`;
 
   const handleSort = useCallback(
@@ -147,13 +136,10 @@ export default function PatientPage() {
 
   const handleLoadPreset = useCallback(
     (filterAst: string) => {
-      // Single URL write — parse the stored AST and call setFilterAst once.
-      // setFilterAst clears the flat params in the same URLSearchParams batch.
       try {
         const node: FilterNode = deserializeFilter(filterAst);
         setFilterAst(node);
       } catch {
-        // Malformed stored AST — ignore silently
       }
     },
     [setFilterAst],
@@ -164,7 +150,6 @@ export default function PatientPage() {
       if (!presetConflict) return;
 
       if (resolution.action === 'save_as_new') {
-        // Create a new preset with the user's local changes under a new name
         createPreset.mutate({
           name: resolution.name,
           filterAst: presetConflict.localPayload.filterAst,
@@ -178,7 +163,6 @@ export default function PatientPage() {
     [presetConflict, createPreset, resolveConflict, dismissConflict],
   );
 
-  // Show loader until we have any data OR bootstrap is done (returning user / error).
   const waitingForInitialData = serverRows.length === 0 && bootstrap.phase !== 'complete' && bootstrap.phase !== 'error';
 
   if (waitingForInitialData) {
@@ -276,23 +260,19 @@ export default function PatientPage() {
         </div>
       </Layout.Content>
 
-      {/* Sync conflict modal (offline → online reconciliation) */}
       <ConflictModal
         conflicts={syncConflicts}
         onResolve={(entry, resolution) => {
-          // Persist the resolution so the queue entry reflects the user's decision
           void getOfflineRepos().then(({ queueRepo }) => {
             if (resolution === 'use_server') {
               queueRepo.markSynced(entry.id);
             }
-            // 'keep_mine' retries on next sync — leave as pending
           });
           setSyncConflicts((prev) => prev.filter((c) => c.entry.id !== entry.id));
         }}
         onDismiss={() => setSyncConflicts([])}
       />
 
-      {/* Preset concurrent-edit conflict modal */}
       <PresetConflictModal conflict={presetConflict} onResolve={handleResolvePresetConflict} onDismiss={dismissConflict} />
     </Layout>
   );

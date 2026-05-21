@@ -30,25 +30,24 @@ function pad(n: number, len = 6): string {
 }
 
 function seedVitals(idx: number, status: PatientEntity['status']): { heartRate: number; bp: string; temp: number; o2sat: number } {
-  // Use idx as a deterministic seed for variety
   const base = (idx * 1664525 + 1013904223) >>> 0;
   const isCritical = status === 'critical';
   const heartRate = isCritical
-    ? 40 + (base % 80)          // 40–119
-    : 55 + (base % 46);         // 55–100
+    ? 40 + (base % 80)
+    : 55 + (base % 46);
   const systolic = isCritical
-    ? 80 + (base % 70)          // 80–149
-    : 100 + (base % 60);        // 100–159
+    ? 80 + (base % 70)
+    : 100 + (base % 60);
   const diastolic = isCritical
-    ? 40 + (base % 40)          // 40–79
-    : 60 + (base % 30);         // 60–89
-  const tempBase = (((base >> 8) * 16807) >>> 0) % 30; // 0–29
+    ? 40 + (base % 40)
+    : 60 + (base % 30);
+  const tempBase = (((base >> 8) * 16807) >>> 0) % 30;
   const temp = isCritical
-    ? parseFloat((36.0 + tempBase / 10).toFixed(1))    // 36.0–38.9
-    : parseFloat((36.0 + (tempBase % 20) / 10).toFixed(1)); // 36.0–37.9
+    ? parseFloat((36.0 + tempBase / 10).toFixed(1))
+    : parseFloat((36.0 + (tempBase % 20) / 10).toFixed(1));
   const o2sat = isCritical
-    ? 82 + (base % 14)          // 82–95
-    : 95 + (base % 6);          // 95–100
+    ? 82 + (base % 14)
+    : 95 + (base % 6);
 
   return { heartRate, bp: `${systolic}/${diastolic}`, temp, o2sat };
 }

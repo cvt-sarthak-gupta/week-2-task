@@ -6,16 +6,11 @@ import { Filter } from '@/features/filters/ast/types';
 import type { FilterNode } from '@/features/filters/ast/types';
 import { deserializeUrl } from '@/features/filters/ast/url-format';
 
-/**
- * Build a typed FilterNode AST from PatientFilters.
- * When `filter` (URL format) is present it takes precedence over flat params.
- */
 export function buildFilterAst(filters: PatientFilters): FilterNode | null {
   if (filters.filter) {
     try {
       return deserializeUrl(filters.filter);
     } catch {
-      // Malformed URL filter — fall through to flat params
     }
   }
 

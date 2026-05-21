@@ -7,7 +7,7 @@ export interface Patient {
   readonly mrn: string;
   readonly firstName: string;
   readonly lastName: string;
-  readonly dob: string; // ISO date
+  readonly dob: string;
   readonly age: number;
   readonly sex: PatientSex;
   readonly status: PatientStatus;
@@ -17,7 +17,6 @@ export interface Patient {
   readonly updatedAt: string;
   readonly version: number;
   readonly notes?: string | undefined;
-  // Live vitals — populated by vitals_updated realtime events; absent until first event
   readonly heartRate?: number | undefined;
   readonly bp?: string | undefined;
   readonly temp?: number | undefined;
@@ -34,7 +33,7 @@ export interface User {
   readonly tenantId: string;
   readonly email: string;
   readonly displayName: string;
-  readonly role: string; // opaque — use capabilities, not this value
+  readonly role: string;
 }
 
 export interface PaginatedResult<T> {
@@ -50,7 +49,7 @@ export interface FilterPreset {
   readonly tenantId: string;
   readonly userId: string;
   readonly name: string;
-  readonly filterAst: string; // serialized FilterNode
+  readonly filterAst: string;
   readonly isShared: boolean;
   readonly version: number;
   readonly createdAt: number;

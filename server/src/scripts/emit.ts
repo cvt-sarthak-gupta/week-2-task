@@ -1,27 +1,9 @@
-/**
- * Script: continuously emit patient updates (status + vitals) for all patients.
- * Cycles through every patient ID in order, sending batches concurrently.
- * Runs until Ctrl+C.
- *
- * Usage:
- *   1. Start the server: npm run dev:server
- *   2. npm run mock:emit
- *
- * Env vars:
- *   TOKEN          – bearer token (auto-fetched if omitted)
- *   PATIENT_COUNT  – total patients per tenant (default: 50000)
- *   BATCH_SIZE     – concurrent PATCHes per tick (default: 50)
- *   TICK_MS        – ms between batches (default: 200)
- *   TENANT         – tenant to target (default: tenant-a)
- */
-
 const BASE_URL     = 'http://localhost:3001';
 const PATIENT_COUNT = parseInt(process.env['PATIENT_COUNT'] ?? '50000', 10);
 const BATCH_SIZE    = parseInt(process.env['BATCH_SIZE']    ?? '50',    10);
 const TICK_MS       = parseInt(process.env['TICK_MS']       ?? '200',   10);
 const TENANT        = process.env['TENANT'] ?? 'tenant-a';
 
-// stable appears 3× so it's the most likely outcome, mirroring real wards
 const STATUSES = ['critical', 'stable', 'admitted', 'pending', 'stable', 'stable'] as const;
 
 function randInt(min: number, max: number): number {

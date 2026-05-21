@@ -1,4 +1,3 @@
-/** All capabilities available in the system. Components check these, never raw roles. */
 export type Capability =
   | 'viewPatients'
   | 'editPatientStatus'

@@ -11,7 +11,6 @@ export class PatientController extends BaseController {
     super();
   }
 
-  /** Extracts validated filter params from the request query string. */
   private buildFilterDto(query: Request['query']): PatientFilterDto {
     const dto: PatientFilterDto = {};
     if (query['status'])    dto.status    = String(query['status']);

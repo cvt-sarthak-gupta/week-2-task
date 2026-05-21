@@ -2,14 +2,10 @@ import type { RowSizeManager } from './rowSizeManager';
 
 export interface VisibleRange {
   readonly startIndex: number;
-  readonly endIndex: number; // exclusive
-  readonly offsetY: number; // translateY for the rendered rows container
+  readonly endIndex: number;
+  readonly offsetY: number;
 }
 
-/**
- * Pure function — computes which rows should be rendered.
- * Used for unit testing in isolation.
- */
 export function getVisibleRange(
   scrollTop: number,
   viewportHeight: number,
@@ -31,13 +27,9 @@ export function getVisibleRange(
 
 export interface ScrollAnchor {
   index: number;
-  offset: number; // px from top of row to viewport top
+  offset: number;
 }
 
-/**
- * After inserting/removing rows above the viewport, computes the new scrollTop
- * to keep the anchored row in the same visual position.
- */
 export function computeAnchoredScrollTop(anchor: ScrollAnchor, sizeManager: RowSizeManager): number {
   return sizeManager.getOffset(anchor.index) + anchor.offset;
 }

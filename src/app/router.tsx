@@ -15,8 +15,6 @@ const Loader = () => (
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isBootstrapping } = useAuth();
-  // Hold rendering until the silent token-refresh attempt settles.
-  // Without this, the router redirects to /login mid-refresh, causing a flash.
   if (isBootstrapping) return <Loader />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return <>{children}</>;

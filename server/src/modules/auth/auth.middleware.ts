@@ -3,8 +3,6 @@ import jwt from 'jsonwebtoken';
 import { UnauthorizedError } from '../../core/errors/index';
 import type { RequestContext } from '../../core/types/context.types';
 
-// Fail fast at startup if the secret is not configured in production.
-// Falling back to a known string would allow anyone to forge tokens.
 const rawSecret = process.env['JWT_SECRET'];
 if (!rawSecret && process.env['NODE_ENV'] === 'production') {
   throw new Error('JWT_SECRET environment variable is required in production');
@@ -52,7 +50,6 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
   }
 }
 
-// Extend Express Request
 declare global {
   namespace Express {
     interface Request {

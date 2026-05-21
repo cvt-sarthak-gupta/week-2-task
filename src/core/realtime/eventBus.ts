@@ -26,5 +26,4 @@ class EventBus {
   }
 }
 
-/** Singleton shared event bus — stream worker posts to this. */
 export const eventBus = new EventBus();

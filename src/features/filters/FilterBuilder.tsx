@@ -9,15 +9,7 @@ import type { FilterNode, AndNode, OrNode, CompareOp, PatientField } from './ast
 import { Filter } from './ast/types';
 import { FILTERABLE_FIELDS, getFieldMeta } from './fieldMeta';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 type GroupLogic = 'and' | 'or';
-
-// ---------------------------------------------------------------------------
-// Field / operator helpers
-// ---------------------------------------------------------------------------
 
 const STRING_OPS: { value: CompareOp; label: string }[] = [
   { value: 'eq',         label: 'equals' },
@@ -69,13 +61,8 @@ function defaultOpForField(field: PatientField): CompareOp | 'range' {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Node mutation helpers — all return new immutable FilterNode trees
-// ---------------------------------------------------------------------------
-
 type UpdateFn = (node: FilterNode) => void;
 
-/** Replace `target` anywhere in the tree using referential identity. */
 function replaceNode(root: FilterNode, target: FilterNode, replacement: FilterNode): FilterNode {
   if (root === target) return replacement;
   switch (root.kind) {
@@ -86,7 +73,6 @@ function replaceNode(root: FilterNode, target: FilterNode, replacement: FilterNo
   }
 }
 
-/** Remove `target` from the tree. If a group becomes empty, keep it (caller may prune). */
 function removeNode(root: FilterNode, target: FilterNode): FilterNode | null {
   if (root === target) return null;
   switch (root.kind) {
@@ -107,7 +93,6 @@ function removeNode(root: FilterNode, target: FilterNode): FilterNode | null {
   }
 }
 
-/** Append a child to a group node identified by reference. */
 function appendToGroup(root: FilterNode, group: FilterNode, child: FilterNode): FilterNode {
   if (root === group) {
     if (root.kind !== 'and' && root.kind !== 'or') return root;
@@ -124,15 +109,10 @@ function appendToGroup(root: FilterNode, group: FilterNode, child: FilterNode): 
   }
 }
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-
 interface NodeProps {
   node: FilterNode;
   root: FilterNode;
   onRootChange: UpdateFn;
-  /** Null when this IS the root (cannot delete root) */
   onDelete: (() => void) | null;
   depth: number;
 }
@@ -150,8 +130,6 @@ function FilterBuilderNode(props: NodeProps) {
       return <FilterBuilderLeaf {...rest} node={node} />;
   }
 }
-
-// --- Group (AND / OR) ---
 
 function FilterBuilderGroup({ node, root, onRootChange, onDelete, depth }: NodeProps & { node: AndNode | OrNode }) {
   const logic = node.kind as GroupLogic;
@@ -194,7 +172,6 @@ function FilterBuilderGroup({ node, root, onRootChange, onDelete, depth }: NodeP
         gap: 6,
       }}
     >
-      {/* Group header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
         <Tooltip title={`Switch to ${logic === 'and' ? 'OR' : 'AND'}`}>
           <Tag
@@ -221,7 +198,6 @@ function FilterBuilderGroup({ node, root, onRootChange, onDelete, depth }: NodeP
         </div>
       </div>
 
-      {/* Children */}
       {node.children.map((child, idx) => {
         const handleChildUpdate: UpdateFn = (newRoot) => onRootChange(newRoot);
         const handleChildDelete = () => {
@@ -240,7 +216,6 @@ function FilterBuilderGroup({ node, root, onRootChange, onDelete, depth }: NodeP
         );
       })}
 
-      {/* Add buttons */}
       <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
         <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={handleAddCondition}>
           Add condition
@@ -252,8 +227,6 @@ function FilterBuilderGroup({ node, root, onRootChange, onDelete, depth }: NodeP
     </div>
   );
 }
-
-// --- NOT wrapper ---
 
 function FilterBuilderNot({ node, root, onRootChange, onDelete, depth }: NodeProps & { node: { kind: 'not'; child: FilterNode } }) {
   const handleUnwrap = () => {
@@ -295,8 +268,6 @@ function FilterBuilderNot({ node, root, onRootChange, onDelete, depth }: NodePro
     </div>
   );
 }
-
-// --- Compare / Range leaf ---
 
 function FilterBuilderLeaf({ node, root, onRootChange, onDelete }: NodeProps & { node: FilterNode & { kind: 'compare' | 'range' } }) {
   const isRange = node.kind === 'range';
@@ -379,7 +350,6 @@ function FilterBuilderLeaf({ node, root, onRootChange, onDelete }: NodeProps & {
         borderRadius: 6,
       }}
     >
-      {/* Field selector */}
       <Select
         size="small"
         value={currentField}
@@ -389,7 +359,6 @@ function FilterBuilderLeaf({ node, root, onRootChange, onDelete }: NodeProps & {
         aria-label="Filter field"
       />
 
-      {/* Operator selector */}
       <Select
         size="small"
         value={currentOp}
@@ -399,7 +368,6 @@ function FilterBuilderLeaf({ node, root, onRootChange, onDelete }: NodeProps & {
         aria-label="Filter operator"
       />
 
-      {/* Value input */}
       {isRange ? (
         <RangeInputs
           node={node as { kind: 'range'; field: PatientField; min: number | string; max: number | string; inclusive: readonly [boolean, boolean] }}
@@ -415,7 +383,6 @@ function FilterBuilderLeaf({ node, root, onRootChange, onDelete }: NodeProps & {
         />
       )}
 
-      {/* Actions */}
       <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
         <Tooltip title="Negate this condition (NOT)">
           <Button size="small" type="text" icon={<StopOutlined />} onClick={handleWrapNot} aria-label="Negate condition" />
@@ -427,8 +394,6 @@ function FilterBuilderLeaf({ node, root, onRootChange, onDelete }: NodeProps & {
     </div>
   );
 }
-
-// --- Value input sub-component ---
 
 interface ValueInputProps {
   field: PatientField;
@@ -472,8 +437,6 @@ function ValueInput({ field: _field, meta, value, onChange }: ValueInputProps) {
   );
 }
 
-// --- Range input sub-component ---
-
 interface RangeInputsProps {
   node: { kind: 'range'; field: PatientField; min: number | string; max: number | string; inclusive: readonly [boolean, boolean] };
   onRangeChange: (side: 'min' | 'max', v: number) => void;
@@ -512,27 +475,15 @@ function RangeInputs({ node, onRangeChange, onInclusiveChange }: RangeInputsProp
   );
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
 export interface FilterBuilderProps {
-  /** Current filter value — null means no filter (empty builder). */
   value: FilterNode | null;
-  /** Called whenever the filter changes. null means "clear". */
   onChange: (node: FilterNode | null) => void;
 }
 
-/**
- * Visual, tree-based filter builder.
- * Renders a composable AND/OR group tree supporting compare nodes, range nodes,
- * and NOT wrappers. All mutations are expressed as pure FilterNode replacements.
- */
 export function FilterBuilder({ value, onChange }: FilterBuilderProps) {
   const root: FilterNode = value ?? Filter.and();
 
   const handleRootChange: UpdateFn = (newRoot) => {
-    // If the root becomes an empty AND group with no children, treat as "no filter"
     if (newRoot.kind === 'and' && newRoot.children.length === 0) {
       onChange(null);
     } else {
@@ -542,7 +493,6 @@ export function FilterBuilder({ value, onChange }: FilterBuilderProps) {
 
   const handleClear = () => onChange(null);
 
-  // Ensure root is always a group (add group wrapper if it's a bare leaf)
   const displayRoot = (root.kind === 'and' || root.kind === 'or')
     ? root
     : Filter.and(root);

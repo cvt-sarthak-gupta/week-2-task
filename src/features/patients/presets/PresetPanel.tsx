@@ -32,7 +32,6 @@ interface PresetPanelProps {
   canShare: boolean;
 }
 
-/** Confirmation modal before overwriting a preset's filter in one click. */
 interface UpdateFilterConfirmProps {
   preset: FilterPreset | null;
   newFilterAst: string | null;
@@ -83,10 +82,6 @@ function UpdateFilterConfirm({ preset, newFilterAst, onConfirm, onCancel }: Upda
     </Modal>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Save modal
-// ---------------------------------------------------------------------------
 
 interface SaveModalProps {
   open: boolean;
@@ -152,10 +147,6 @@ function SaveModal({ open, canShare, onOk, onCancel }: SaveModalProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Edit modal — name + share + embedded filter builder
-// ---------------------------------------------------------------------------
-
 interface EditModalState {
   preset: FilterPreset;
 }
@@ -163,7 +154,6 @@ interface EditModalState {
 interface EditModalProps {
   state: EditModalState | null;
   canShare: boolean;
-  /** The filter currently active in the FilterBar — used for "use current filter" shortcut. */
   currentFilterAst: string | null;
   onOk: (
     id: string,
@@ -186,7 +176,6 @@ function EditModal({ state, canShare, currentFilterAst, onOk, onCancel }: EditMo
     parseFilterNode(preset?.filterAst),
   );
 
-  // Sync when a different preset is opened
   const presetId = preset?.id;
   const [lastId, setLastId] = useState(presetId);
   if (presetId !== lastId) {
@@ -205,7 +194,7 @@ function EditModal({ state, canShare, currentFilterAst, onOk, onCancel }: EditMo
   const sharedChanged   = isShared !== preset.isShared;
   const filterChanged   = draftFilterAst !== originalFilterAst;
   const hasChanges      = nameChanged || sharedChanged || filterChanged;
-  const hasValidFilter  = !!filterDraft; // filter must not be empty
+  const hasValidFilter  = !!filterDraft;
 
   const handleOk = () => {
     if (!name.trim() || !hasValidFilter) return;
@@ -253,7 +242,6 @@ function EditModal({ state, canShare, currentFilterAst, onOk, onCancel }: EditMo
     >
       <Space direction="vertical" style={{ width: '100%' }} size="large">
 
-        {/* ── Name ── */}
         <div>
           <label htmlFor="preset-edit-name" style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>
             Preset name
@@ -267,7 +255,6 @@ function EditModal({ state, canShare, currentFilterAst, onOk, onCancel }: EditMo
           />
         </div>
 
-        {/* ── Share toggle ── */}
         {canShare && (
           <Space>
             <Switch
@@ -284,7 +271,6 @@ function EditModal({ state, canShare, currentFilterAst, onOk, onCancel }: EditMo
 
         <Divider style={{ margin: '4px 0' }} />
 
-        {/* ── Filter builder ── */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <Typography.Text strong>Filter conditions</Typography.Text>
@@ -334,10 +320,6 @@ function EditModal({ state, canShare, currentFilterAst, onOk, onCancel }: EditMo
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
-
 export function PresetPanel({
   tenantId: _tenantId,
   userId,
@@ -358,7 +340,6 @@ export function PresetPanel({
 
   const menuItems = presets.map((preset) => {
     const isOwner = preset.userId === userId;
-    // Shared presets are editable by any tenant member; private presets are owner-only
     const canEdit = isOwner || preset.isShared;
     return {
       key: preset.id,
@@ -529,17 +510,8 @@ export function PresetPanel({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Utilities
-// ---------------------------------------------------------------------------
-
-/**
- * Convert current PatientFilters to the INTERNAL serialized AST format for preset storage.
- * Presets always store internal format; the URL uses the human-readable format.
- */
 export function filtersToAst(filters: PatientFilters): string | null {
   if (filters.filter) {
-    // URL format → FilterNode → internal format
     try {
       const node = deserializeUrl(filters.filter);
       return serialize(node);
@@ -552,7 +524,6 @@ export function filtersToAst(filters: PatientFilters): string | null {
   return serialize(ast);
 }
 
-/** Parse a stored INTERNAL-format AST string back to a FilterNode, or null on failure. */
 export function astToFilterNode(filterAst: string): FilterNode | null {
   try {
     return deserialize(filterAst);

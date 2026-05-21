@@ -6,8 +6,6 @@ import type { ServerEventPayload, EventBroadcaster } from './ws';
 
 type SseClient = { res: Response; tenantId: string };
 
-// Module-scoped Set is intentional — one SSE fan-out list per server process.
-// Cleanup on 'close' prevents unbounded growth.
 const clients = new Set<SseClient>();
 
 export function createSseRouter(): Router & { broadcastSse: EventBroadcaster['broadcast'] } {
@@ -37,7 +35,6 @@ export function createSseRouter(): Router & { broadcastSse: EventBroadcaster['br
 
     res.write(': connected\n\n');
 
-    // tenantId comes exclusively from the verified JWT — not from query params
     const client: SseClient = { res, tenantId };
     clients.add(client);
 
@@ -47,7 +44,6 @@ export function createSseRouter(): Router & { broadcastSse: EventBroadcaster['br
   router.broadcastSse = (event: ServerEventPayload) => {
     const data = `data: ${JSON.stringify(event)}\n\n`;
     for (const client of clients) {
-      // Only push to clients whose tenant matches the event
       if (client.tenantId === event.tenantId) {
         client.res.write(data);
       }

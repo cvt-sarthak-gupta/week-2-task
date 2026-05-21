@@ -26,7 +26,6 @@ export function useVirtualizer({ count, defaultRowHeight = 48, overscan = 3 }: V
     const next = new RowSizeManager(count, defaultRowHeight);
     if (sizeManagerRef.current) {
       const prev = sizeManagerRef.current;
-      // Capture scroll anchor before rebuilding so we can restore position after
       const container = containerRef.current;
       const anchorIndex = prev.findIndex(container?.scrollTop ?? 0);
       const anchorOffset = (container?.scrollTop ?? 0) - prev.getOffset(anchorIndex);
@@ -36,7 +35,6 @@ export function useVirtualizer({ count, defaultRowHeight = 48, overscan = 3 }: V
       }
       sizeManagerRef.current = next;
 
-      // Restore scroll so the anchored row stays at the same visual position
       if (container && anchorIndex < count) {
         container.scrollTop = computeAnchoredScrollTop({ index: anchorIndex, offset: anchorOffset }, next);
       }
@@ -65,10 +63,8 @@ export function useVirtualizer({ count, defaultRowHeight = 48, overscan = 3 }: V
     rafRef.current = requestAnimationFrame(recompute);
   }, [recompute]);
 
-  // Synchronous measurement before first paint so the initial render uses the real clientHeight
   useLayoutEffect(() => {
     recompute();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -84,7 +80,6 @@ export function useVirtualizer({ count, defaultRowHeight = 48, overscan = 3 }: V
     };
   }, [scheduleRecompute]);
 
-  // Re-run whenever the row count changes (e.g. data loads after mount with count=0)
   useEffect(() => {
     scheduleRecompute();
   }, [count, scheduleRecompute]);
@@ -98,8 +93,6 @@ export function useVirtualizer({ count, defaultRowHeight = 48, overscan = 3 }: V
         const prevOffset = sizeManagerRef.current.getOffset(index);
         const delta = height - sizeManagerRef.current.getSize(index);
         sizeManagerRef.current.setSize(index, height);
-        // If the resized row is above the current scroll position, shift scrollTop
-        // by the same delta so the visible content doesn't jump.
         if (container && prevOffset < container.scrollTop) {
           container.scrollTop += delta;
         }

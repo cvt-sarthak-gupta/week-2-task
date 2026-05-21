@@ -27,9 +27,6 @@ export function usePatientFilters() {
   const sort = searchParams.getAll('sort').join('&') || null;
   const filter = searchParams.get('filter');
 
-  // Memoized so downstream hooks (useFilterWorker) receive a stable reference
-  // when the URL hasn't actually changed — prevents the new-object-every-render
-  // → new useCallback → useEffect fires → setState → re-render loop.
   const filters = useMemo((): PatientFilters => {
     const f: PatientFilters = {};
     if (status) f.status = status;
@@ -55,14 +52,6 @@ export function usePatientFilters() {
     [setSearchParams],
   );
 
-  /**
-   * Replace the entire filter expression with a FilterNode AST.
-   * Serializes to the human-readable URL format and writes it WITHOUT percent-encoding
-   * the structural characters ( ) : , — they are valid in query strings per RFC 3986.
-   * Uses navigate() with a raw string instead of URLSearchParams to avoid the
-   * application/x-www-form-urlencoded over-encoding applied by setSearchParams.
-   * Pass null to clear all filters.
-   */
   const setFilterAst = useCallback(
     (node: FilterNode | null) => {
       const raw = buildRawSearch({ status, ward, search }, sort, node ? serializeUrl(node) : null);
@@ -71,7 +60,6 @@ export function usePatientFilters() {
     [navigate, status, ward, search, sort],
   );
 
-  /** Set the sort state without percent-encoding the field:dir:... separators. */
   const setSort = useCallback(
     (sortParam: string | undefined) => {
       const raw = buildRawSearch({ status, ward, search }, sortParam ?? null, filter);
@@ -80,7 +68,6 @@ export function usePatientFilters() {
     [navigate, status, ward, search, filter],
   );
 
-  /** The current `filter` URL param parsed into a FilterNode, or null. Stable reference when filter string is unchanged. */
   const parsedFilterAst = useMemo((): FilterNode | null => {
     if (!filter) return null;
     try {

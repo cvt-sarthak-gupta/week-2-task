@@ -17,9 +17,6 @@ function BootstrappedApp() {
   const { user } = useAuth();
   const { data: schema } = useBootstrap(user?.id ?? null);
 
-  // Clear the entire React Query cache whenever the identity changes so stale
-  // data from a previous session never bleeds into the new one. This covers
-  // logout (prev → null), user switch, and tenant switch.
   const prevIdentityRef = useRef<string | null>(null);
   useEffect(() => {
     const identity = user ? `${user.tenantId}:${user.id}` : null;
@@ -29,7 +26,6 @@ function BootstrappedApp() {
     prevIdentityRef.current = identity;
   }, [user]);
 
-  // Initialize stream worker and connect realtime stream when the user authenticates
   useEffect(() => {
     if (!user) return;
     const token = getAccessToken();
@@ -37,15 +33,12 @@ function BootstrappedApp() {
     streamWorkerClient.init();
     const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`;
     connectionManager.connect(wsUrl, token);
-    // Pre-warm the offline DB so it's ready before the first offline fallback
     void getOfflineRepos();
     return () => {
       connectionManager.disconnect();
-      // Keep the worker alive across reconnects; terminate only on full logout
     };
   }, [user]);
 
-  // Start offline status manager once on mount
   useEffect(() => {
     offlineStatusManager.start();
     return () => offlineStatusManager.stop();

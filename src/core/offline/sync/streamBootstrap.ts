@@ -78,11 +78,9 @@ export async function streamBootstrap(options: StreamBootstrapOptions): Promise<
       const { done, value } = await reader.read();
 
       if (done) {
-        // Decode any remaining bytes with stream: false to flush the decoder
         const remaining = decoder.decode(undefined, { stream: false });
         buffer += remaining;
 
-        // Process any remaining complete lines in the buffer
         const lines = buffer.split('\n');
         for (const line of lines) {
           const trimmed = line.trim();
@@ -102,9 +100,7 @@ export async function streamBootstrap(options: StreamBootstrapOptions): Promise<
 
       buffer += decoder.decode(value, { stream: true });
 
-      // Split on newlines; the last element may be an incomplete line
       const lines = buffer.split('\n');
-      // Keep the last (potentially incomplete) segment in the buffer
       buffer = lines.pop() ?? '';
 
       for (const line of lines) {
@@ -120,9 +116,6 @@ export async function streamBootstrap(options: StreamBootstrapOptions): Promise<
 
         if (pendingBatch.length >= batchSize) {
           flushBatch();
-          // Yield to the event loop so scroll events and RAF callbacks can fire
-          // between SQLite writes — prevents the main thread from blocking for
-          // the entire duration of a large network chunk.
           await new Promise<void>((resolve) => { setTimeout(resolve, 0); });
         }
       }

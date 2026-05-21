@@ -15,7 +15,6 @@ export function toggleSort(state: SortState, field: string): SortState {
   if (existing.dir === 'asc') {
     return state.map((s) => (s.field === field ? { ...s, dir: 'desc' as const } : s));
   }
-  // Remove the sort entry
   return state.filter((s) => s.field !== field);
 }
 
@@ -24,7 +23,6 @@ export function getSortPriority(state: SortState, field: string): number | null 
   return idx === -1 ? null : idx + 1;
 }
 
-/** Returns a comparator function for the current sort state. */
 export function buildComparator<T>(state: SortState): (a: T, b: T) => number {
   return (a, b) => {
     for (const { field, dir } of state) {

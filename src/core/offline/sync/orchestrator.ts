@@ -25,8 +25,6 @@ export interface SyncDependencies {
   setLastSyncAt: (ts: number) => void;
 }
 
-// Per-tenant sync lock — prevents concurrent syncs for the same tenant while
-// allowing independent tenants (or test contexts) to sync simultaneously.
 const syncInProgress = new Map<string, boolean>();
 
 export async function runSync(deps: SyncDependencies): Promise<SyncResult> {
@@ -72,7 +70,6 @@ export async function runSync(deps: SyncDependencies): Promise<SyncResult> {
             conflicts.push({ entry, meta: conflictMeta });
           }
         } else {
-          // Non-conflict error: increment retry counter, leave in queue for next sync
           console.warn(`[sync] queue entry ${entry.id} failed (attempt ${entry.retries + 1}):`, err);
           deps.onEntryRetried?.(entry.id);
         }

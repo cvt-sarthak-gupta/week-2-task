@@ -1,4 +1,3 @@
-/** Centralized TanStack Query key factory. */
 export const queryKeys = {
   patients: {
     all: (tenantId: string) => ['patients', tenantId] as const,

@@ -1,6 +1,5 @@
 import type { Patient, PatientStatus, PatientSex } from '@/shared/types';
 
-/** All filterable fields and their value types — correlated via conditional type. */
 export type PatientField = keyof Patient;
 
 export type CompareOp = 'eq' | 'neq' | 'contains' | 'startsWith' | 'gt' | 'gte' | 'lt' | 'lte';
@@ -39,11 +38,9 @@ export interface RangeNode {
   readonly field: PatientField;
   readonly min: string | number;
   readonly max: string | number;
-  /** [minInclusive, maxInclusive] */
   readonly inclusive: readonly [boolean, boolean];
 }
 
-/** Safe constructors */
 export const Filter = {
   and: (...children: FilterNode[]): AndNode => ({ kind: 'and', children }),
   or: (...children: FilterNode[]): OrNode => ({ kind: 'or', children }),

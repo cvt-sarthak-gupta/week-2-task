@@ -18,14 +18,12 @@ export class SseTransport implements ITransport {
     if (this.es) this.close();
     this.setState('connecting');
 
-    // Convert ws(s):// → http(s):// and replace /ws path suffix with /sse
     const httpBase = url.replace(/^ws(s?):\/\//, 'http$1://').replace(/\/ws$/, '');
     const sseUrl = `${httpBase}/sse?token=${encodeURIComponent(token)}`;
     this.es = new EventSource(sseUrl);
 
     this.es.onopen = () => this.setState('connected');
     this.es.onerror = () => {
-      // EventSource auto-reconnects; we just reflect the state
       this.setState(this.es?.readyState === EventSource.CLOSED ? 'disconnected' : 'connecting');
     };
     this.es.onmessage = (e) => {
@@ -39,9 +37,7 @@ export class SseTransport implements ITransport {
     this.setState('disconnected');
   }
 
-  /** SSE is one-way; send is a no-op (heartbeat pings go over REST). */
   send(_data: string): void {
-    // intentional no-op
   }
 
   onMessage(cb: MessageCb): () => void {

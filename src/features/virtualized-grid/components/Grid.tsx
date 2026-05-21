@@ -16,11 +16,8 @@ interface GridProps {
   storageKey: string;
   recentUpdateCount?: number;
   onNearBottom?: () => void;
-  /** Rows from the end at which onNearBottom fires. Defaults to 20. */
   nearBottomThreshold?: number;
-  /** When this value changes the grid scrolls back to the top (e.g. on filter change). */
   scrollResetKey?: string;
-  // Sort is controlled externally (API-level)
   sortState?: SortState;
   onSort?: (field: string) => void;
   'aria-label'?: string;
@@ -44,9 +41,6 @@ export function Grid({
 
   const { widths, setWidth } = usePersistedColumnWidths(columns, storageKey);
 
-  // Use totalCount (server total) if available so the scroll container represents the
-  // full dataset — not just the currently loaded slice. Unloaded rows render as
-  // skeletons and trigger fetchNextPage when they scroll into view.
   const virtualizerCount = (totalCount != null && totalCount > rows.length) ? totalCount : rows.length;
 
   const { containerRef, totalHeight, visibleRange, measureRow, scrollToIndex } = useVirtualizer({
@@ -64,7 +58,6 @@ export function Grid({
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
     scrollToIndex(0, 'auto');
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollResetKey]);
 
   const handleToggleExpand = useCallback((id: string) => {
@@ -99,11 +92,6 @@ export function Grid({
 
   const { startIndex, endIndex, offsetY } = visibleRange;
 
-  // Keep a ref to rows.length so the near-bottom effect reads the latest value
-  // without subscribing to it. Subscribing causes an infinite cascade: each new
-  // page load changes rows.length → effect fires → fetchNextPage → new page →
-  // rows.length changes again. Scroll events change endIndex, so that's the
-  // only dep we actually need to trigger the check.
   const rowsLengthRef = useRef(rows.length);
   rowsLengthRef.current = rows.length;
 
@@ -111,7 +99,6 @@ export function Grid({
     if (onNearBottom && rowsLengthRef.current > 0 && endIndex >= rowsLengthRef.current - nearBottomThreshold) {
       onNearBottom();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [endIndex, onNearBottom]);
 
   return (
@@ -126,7 +113,6 @@ export function Grid({
         onKeyDown={handleKeyDown}
         style={{ flex: 1, minHeight: 0, overflow: 'auto', outline: 'none', position: 'relative' }}
       >
-        {/* Header inside scroll container so horizontal scroll keeps header/body aligned */}
         <HeaderRow
           columns={enrichedColumns}
           widths={widths}
@@ -140,8 +126,6 @@ export function Grid({
               const absIdx = startIndex + relIdx;
               const patient = rows[absIdx];
 
-              // Unloaded row — show a lightweight skeleton so the scroll position is
-              // preserved and the fetch-next-page effect has time to load real data.
               if (!patient) {
                 return (
                   <div

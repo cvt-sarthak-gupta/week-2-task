@@ -1,5 +1,3 @@
-/** Mirror of the client-side FilterNode types. Keep in sync with src/features/filters/ast/types.ts */
-
 export type CompareOp = 'eq' | 'neq' | 'contains' | 'startsWith' | 'gt' | 'gte' | 'lt' | 'lte';
 
 export type FilterNode =

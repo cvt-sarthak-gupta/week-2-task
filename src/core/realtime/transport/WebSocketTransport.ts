@@ -22,21 +22,17 @@ export class WebSocketTransport implements ITransport {
     const ws = new WebSocket(`${url}?token=${encodeURIComponent(token)}`);
     this.ws = ws;
 
-    // Capture `ws` in closure — stale handlers (from a prior connection) no-op when this.ws !== ws
     ws.onopen = () => {
       if (this.ws !== ws) return;
       this.setState('connected');
     };
     ws.onclose = (e) => {
-      if (this.ws !== ws) return; // already replaced or intentionally closed
+      if (this.ws !== ws) return;
       this.ws = null;
-      // 1008: policy violation (e.g. unsupported) → treat as failed so manager can switch transport
       this.setState(e.code === 1008 ? 'failed' : 'disconnected');
     };
     ws.onerror = () => {
-      if (this.ws !== ws) return; // stale handler — intentional close or reconnect already happened
-      // Network errors are transient — retry WebSocket rather than falling back to SSE.
-      // onerror is always followed by onclose, but this.ws = null makes that onclose a no-op.
+      if (this.ws !== ws) return;
       this.ws = null;
       this.setState('disconnected');
     };
@@ -48,7 +44,7 @@ export class WebSocketTransport implements ITransport {
   close(): void {
     this._intentionalClose = true;
     const ws = this.ws;
-    this.ws = null; // nulled first so stale handlers no-op via `this.ws !== ws`
+    this.ws = null;
     ws?.close(1000, 'client_close');
     this.setState('disconnected');
   }

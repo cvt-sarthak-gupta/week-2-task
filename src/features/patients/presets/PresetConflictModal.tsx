@@ -9,9 +9,7 @@ export type ConflictResolution =
   | { action: 'save_as_new'; name: string };
 
 export interface PresetConflict {
-  /** The update the user was trying to save */
   localPayload: Pick<FilterPreset, 'name' | 'filterAst' | 'isShared'>;
-  /** The current server version that blocked the update */
   serverPayload: FilterPreset;
   presetId: string;
 }

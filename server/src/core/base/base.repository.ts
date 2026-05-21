@@ -75,7 +75,6 @@ export abstract class BaseRepository<T extends { id: string; tenantId?: string }
     return items.filter((item) => Object.entries(where).every(([k, v]) => (item as Record<string, unknown>)[k] === v)).length;
   }
 
-  // Accepts a complete entity (not Partial) to prevent partial-save silent data loss.
   async save(data: T): Promise<T> {
     this.store.set(this.tenantId, data);
     return data;

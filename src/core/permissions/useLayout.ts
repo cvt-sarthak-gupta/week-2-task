@@ -2,11 +2,6 @@ import { useMemo } from 'react';
 import { usePermissions } from './PermissionProvider';
 import type { ColumnDef } from '@/features/virtualized-grid/core/columnState';
 
-/**
- * Filters a static column definition list to only those permitted by the
- * tenant's layout schema. When visibleColumns is empty (unconfigured), all
- * columns are returned unchanged.
- */
 export function useVisibleColumns(allColumns: readonly ColumnDef[]): readonly ColumnDef[] {
   const { schema } = usePermissions();
   return useMemo(() => {
@@ -20,10 +15,6 @@ export function useVisibleColumns(allColumns: readonly ColumnDef[]): readonly Co
   }, [allColumns, schema.layout]);
 }
 
-/**
- * Returns whether a named side widget is permitted by the layout schema.
- * When sideWidgets is empty (unconfigured), all widgets are visible.
- */
 export function useIsWidgetVisible(widgetId: string): boolean {
   const { schema } = usePermissions();
   const { sideWidgets } = schema.layout;
@@ -31,10 +22,6 @@ export function useIsWidgetVisible(widgetId: string): boolean {
   return sideWidgets.includes(widgetId);
 }
 
-/**
- * Returns whether a named action bar item is permitted by the layout schema.
- * When actionBar is empty (unconfigured), all actions are visible.
- */
 export function useIsActionVisible(actionId: string): boolean {
   const { schema } = usePermissions();
   const { actionBar } = schema.layout;

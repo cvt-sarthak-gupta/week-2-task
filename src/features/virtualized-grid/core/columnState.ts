@@ -15,7 +15,6 @@ export function persistColumnWidths(key: string, widths: ColumnWidths): void {
   try {
     localStorage.setItem(`${STORAGE_KEY_PREFIX}_${key}`, JSON.stringify(widths));
   } catch {
-    // localStorage may be unavailable in some environments
   }
 }
 

@@ -38,21 +38,12 @@ interface UpdatePresetPayload {
   filterAst?: string;
   isShared?: boolean;
   version: number;
-  /** When true, bypasses optimistic locking on the server (user explicitly chose to overwrite). */
   force?: boolean;
 }
 
-/**
- * Hook that manages preset updates and surfaces conflicts via a structured
- * ConflictResolution flow instead of a plain error notification.
- *
- * Usage:
- *   const { mutate, conflict, resolveConflict, dismissConflict } = useUpdatePreset(tenantId, userId);
- */
 export function useUpdatePreset(tenantId: string, userId: string) {
   const qc = useQueryClient();
   const [conflict, setConflict] = useState<PresetConflict | null>(null);
-  // Cache the pending payload so we can retry / resolve it
   const [pendingPayload, setPendingPayload] = useState<UpdatePresetPayload | null>(null);
 
   const mutation = useMutation({
@@ -60,8 +51,6 @@ export function useUpdatePreset(tenantId: string, userId: string) {
       const { id, force, version, ...body } = payload;
       const headers: Record<string, string> = {};
       if (!force) {
-        // If-Match enables true optimistic concurrency: the server rejects the
-        // write if the version has changed since we last loaded the preset.
         headers['If-Match'] = String(version);
       }
       return apiFetch<FilterPreset>(`/presets/${id}`, {
@@ -78,7 +67,6 @@ export function useUpdatePreset(tenantId: string, userId: string) {
     onError: (err: unknown, variables) => {
       const apiErr = err as { status?: number; body?: unknown };
       if (apiErr.status === 409) {
-        // Structured conflict — surface to UI rather than showing notification
         const body = apiErr.body as { serverPayload?: FilterPreset; serverVersion?: number } | undefined;
         if (body?.serverPayload) {
           setConflict({
@@ -103,19 +91,16 @@ export function useUpdatePreset(tenantId: string, userId: string) {
 
     switch (resolution.action) {
       case 'force_overwrite':
-        // Re-send with force flag — server bypasses version check
         mutation.mutate({ ...pendingPayload, force: true });
         break;
 
       case 'accept_server':
-        // Discard local changes — just invalidate so UI refreshes to server state
         setConflict(null);
         setPendingPayload(null);
         void qc.invalidateQueries({ queryKey: queryKeys.presets.all(tenantId, userId) });
         break;
 
       case 'save_as_new': {
-        // Handled by caller creating a new preset — just dismiss the conflict
         setConflict(null);
         setPendingPayload(null);
         break;

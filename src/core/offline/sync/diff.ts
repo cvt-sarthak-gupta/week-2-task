@@ -5,10 +5,6 @@ export type DiffOp =
   | { type: 'update'; patient: Patient; prev: Patient }
   | { type: 'remove'; id: string };
 
-/**
- * Computes the minimal diff between local cached state and incoming server state.
- * Pure function — 100% branch coverage required.
- */
 export function computeDiff(
   local: readonly Patient[],
   server: readonly Patient[],
@@ -17,7 +13,6 @@ export function computeDiff(
   const serverById = new Map<string, Patient>(server.map((p) => [p.id, p]));
   const ops: DiffOp[] = [];
 
-  // Check server rows against local
   for (const serverPatient of server) {
     const localPatient = localById.get(serverPatient.id);
     if (!localPatient) {
@@ -25,10 +20,8 @@ export function computeDiff(
     } else if (serverPatient.version > localPatient.version) {
       ops.push({ type: 'update', patient: serverPatient, prev: localPatient });
     }
-    // Equal or lower version: no-op (local is ahead or same)
   }
 
-  // Check for removals (local has rows server doesn't)
   for (const localPatient of local) {
     if (!serverById.has(localPatient.id)) {
       ops.push({ type: 'remove', id: localPatient.id });
@@ -38,7 +31,6 @@ export function computeDiff(
   return ops;
 }
 
-/** Applies a diff to a local dataset, returning a new array. */
 export function applyDiff(local: readonly Patient[], diff: readonly DiffOp[]): Patient[] {
   const byId = new Map<string, Patient>(local.map((p) => [p.id, p]));
 

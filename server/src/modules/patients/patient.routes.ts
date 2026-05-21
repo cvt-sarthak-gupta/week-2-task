@@ -10,8 +10,6 @@ import { authMiddleware } from '../auth/auth.middleware';
 export function createPatientRouter(store: InMemoryStore<PatientEntity>, broadcaster: EventBroadcaster): Router {
   const router = Router();
 
-  // All patient routes require authentication — tenant isolation relies on req.ctx.tenantId
-  // which is populated exclusively by the verified JWT inside authMiddleware.
   router.use(authMiddleware);
 
   const getController = (tenantId: string) => {

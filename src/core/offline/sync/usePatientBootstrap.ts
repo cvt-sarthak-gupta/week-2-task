@@ -14,7 +14,6 @@ export type BootstrapPhase = 'idle' | 'viewport' | 'streaming' | 'complete' | 'e
 export interface BootstrapState {
   phase: BootstrapPhase;
   received: number;
-  /** Server-reported total row count, available as soon as the viewport fetch returns. */
   serverTotal?: number;
   error?: Error;
 }
@@ -64,7 +63,6 @@ export function usePatientBootstrap(tenantId: string): BootstrapState {
 
       if (cancelled) return;
 
-      // Phase 0: existing data — invalidate once so the grid reads from SQLite immediately.
       const count = patientRepo.countByTenant(tenantId);
       if (count > 0) {
         startTransition(() => {
@@ -72,8 +70,6 @@ export function usePatientBootstrap(tenantId: string): BootstrapState {
         });
       }
 
-      // Phase 1: viewport fetch — first 100 rows for immediate display.
-      // Only runs when SQLite is empty (first visit or cleared storage).
       if (count === 0 && offlineStatusManager.status !== 'offline') {
         dispatch({ type: 'VIEWPORT_START' });
         try {
@@ -86,9 +82,6 @@ export function usePatientBootstrap(tenantId: string): BootstrapState {
           const data = firstPage.data;
           patientRepo.upsertMany(tenantId, data);
 
-          // Tell the rest of the app how many records exist on the server so the
-          // grid can size its scroll container and pagination correctly from the start,
-          // without waiting for the full background stream to complete.
           dispatch({ type: 'SERVER_TOTAL', total: firstPage.total });
 
           if (data.length > 0) {
@@ -99,21 +92,15 @@ export function usePatientBootstrap(tenantId: string): BootstrapState {
             );
           }
 
-          // One invalidation to show the viewport rows — this is the only visible update.
           startTransition(() => {
             qc.invalidateQueries({ queryKey: queryKeys.patients.all(tenantId) });
           });
         } catch {
-          // Non-fatal — continue to stream phase
         }
       }
 
       if (cancelled) return;
 
-      // Phase 2: background stream — silently fills SQLite with all remaining records.
-      // No per-batch invalidation: the grid never sees data "popping in" mid-stream.
-      // One final invalidation fires when the stream completes so pagination and totals
-      // reflect the full dataset.
       if (count === 0) {
         async function kickoffStream(): Promise<void> {
           if (offlineStatusManager.status === 'offline') return;
@@ -131,8 +118,6 @@ export function usePatientBootstrap(tenantId: string): BootstrapState {
               url: `/api/patients/stream?tenantId=${encodeURIComponent(tenantId)}`,
               ...(token && { headers: { Authorization: `Bearer ${token}` } }),
               signal: abortController.signal,
-              // Large batch size: flush SQLite every 500 rows to keep write bursts small
-              // while still achieving a single HTTP connection for all 50k records.
               batchSize: 500,
               onBatch: (batch) => {
                 patientRepo.upsertMany(tenantId, batch);
@@ -149,8 +134,6 @@ export function usePatientBootstrap(tenantId: string): BootstrapState {
 
             if (!cancelled) {
               dispatch({ type: 'COMPLETE' });
-              // Single invalidation after the full dataset is in SQLite.
-              // Refreshes pagination totals and any skeleton rows the user may have scrolled into.
               startTransition(() => {
                 qc.invalidateQueries({ queryKey: queryKeys.patients.all(tenantId) });
               });
@@ -173,7 +156,6 @@ export function usePatientBootstrap(tenantId: string): BootstrapState {
           }, 0) as unknown as number;
         }
       } else {
-        // Returning user — SQLite already has data; delta updates come from useSyncOnReconnect.
         if (!cancelled) dispatch({ type: 'COMPLETE' });
       }
     }

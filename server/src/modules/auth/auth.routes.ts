@@ -3,9 +3,6 @@ import bcrypt from 'bcrypt';
 import jwt, { type SignOptions } from 'jsonwebtoken';
 import { JWT_SECRET } from './auth.middleware';
 
-// Passwords are stored as bcrypt hashes — never plaintext.
-// Pre-computed from 'password123' with 10 salt rounds.
-// In production, replace these hashes with real per-user hashes from a database.
 const DEMO_PASSWORD_HASH = '$2b$10$5VJFoUeGPG6sOpeV.xB9hO87ffMXmqMe1lUaQGskDSO1DvikUXpI6';
 
 const DEMO_USERS = [
@@ -31,11 +28,6 @@ const DEMO_USERS = [
   },
 ] as const;
 
-// Access token lifetime is kept short (5 min) to limit the exposure window
-// if a token is somehow intercepted. The refresh token (httpOnly cookie) handles
-// transparent re-authentication.
-// `exactOptionalPropertyTypes` requires a non-undefined value for expiresIn.
-// The nullish fallback guarantees that, but we must narrow the type explicitly.
 function toExpiry(raw: string | undefined, fallback: string): NonNullable<SignOptions['expiresIn']> {
   return (raw ?? fallback) as NonNullable<SignOptions['expiresIn']>;
 }
@@ -55,8 +47,6 @@ export function createAuthRouter(): Router {
 
     const user = DEMO_USERS.find((u) => u.email === email);
 
-    // Constant-time comparison — bcrypt.compare takes the same time even for unknown users,
-    // which prevents timing-based user enumeration attacks.
     const passwordMatch = user ? await bcrypt.compare(password, user.passwordHash) : await bcrypt.compare(password, DEMO_PASSWORD_HASH);
 
     if (!user || !passwordMatch) {
