@@ -1,22 +1,13 @@
-import { randomUUID } from 'node:crypto';
 import type { InMemoryStore } from '../../infrastructure/inMemoryStore';
 import type { PresetEntity } from './preset.entity';
+import type { CreatePresetInput, UpdatePresetInput } from './preset.types';
+import { PRESET_MESSAGES } from './preset.messages';
+import { PresetHelper } from './preset.helper';
 import { NotFoundError, ForbiddenError, ConflictError, ValidationError } from '../../core/errors/index';
 
-export interface CreatePresetDto {
-  name: string;
-  filterAst: string;
-  isShared: boolean;
+export interface CreatePresetDto extends CreatePresetInput {
   tenantId: string;
   userId: string;
-}
-
-export interface UpdatePresetDto {
-  name?: string;
-  filterAst?: string;
-  isShared?: boolean;
-  version?: number;
-  force?: boolean;
 }
 
 export class PresetService {
@@ -28,11 +19,11 @@ export class PresetService {
 
   create(dto: CreatePresetDto): PresetEntity {
     if (!dto.name || !dto.filterAst) {
-      throw new ValidationError('name and filterAst are required');
+      throw new ValidationError(PRESET_MESSAGES.VALIDATION_REQUIRED);
     }
     const now = Date.now();
     const preset: PresetEntity = {
-      id: randomUUID(),
+      id: PresetHelper.generateId(),
       tenantId: dto.tenantId,
       userId: dto.userId,
       name: dto.name,
@@ -46,12 +37,12 @@ export class PresetService {
     return preset;
   }
 
-  update(tenantId: string, userId: string, id: string, dto: UpdatePresetDto): PresetEntity {
+  update(tenantId: string, userId: string, id: string, dto: UpdatePresetInput): PresetEntity {
     const existing = this.store.get(tenantId, id);
-    if (!existing) throw new NotFoundError('Preset not found');
+    if (!existing) throw new NotFoundError(PRESET_MESSAGES.NOT_FOUND);
 
     if (existing.userId !== userId && !existing.isShared) {
-      throw new ForbiddenError('You do not have permission to edit this preset');
+      throw new ForbiddenError(PRESET_MESSAGES.FORBIDDEN);
     }
 
     if (!dto.force && dto.version !== undefined && dto.version !== existing.version) {
@@ -76,8 +67,8 @@ export class PresetService {
 
   delete(tenantId: string, userId: string, id: string): void {
     const existing = this.store.get(tenantId, id);
-    if (!existing) throw new NotFoundError('Preset not found');
-    if (existing.userId !== userId) throw new ForbiddenError('Only the owner can delete a preset');
+    if (!existing) throw new NotFoundError(PRESET_MESSAGES.NOT_FOUND);
+    if (existing.userId !== userId) throw new ForbiddenError(PRESET_MESSAGES.OWNER_ONLY_DELETE);
     this.store.delete(tenantId, id);
   }
 }

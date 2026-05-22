@@ -50,14 +50,12 @@ describe('serialize → deserialize round-trip', () => {
   });
 
   it('boolean true value', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const node = Filter.eq('status' as any, true);
+    const node = Filter.eq('status', true);
     expect(roundTrip(node)).toEqual(node);
   });
 
   it('boolean false value', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const node = Filter.eq('status' as any, false);
+    const node = Filter.eq('status', false);
     expect(roundTrip(node)).toEqual(node);
     expect(serialize(node)).toContain('b:false');
   });

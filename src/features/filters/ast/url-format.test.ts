@@ -100,14 +100,12 @@ describe('round-trip: serializeUrl → deserializeUrl', () => {
     expect(rt(Filter.lte('age', 100))).toEqual(Filter.lte('age', 100));
   });
   it('boolean true value', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const f = Filter.eq('status' as any, true);
+    const f = Filter.eq('status', true);
     expect(rt(f)).toEqual(f);
   });
 
   it('boolean false value round-trips', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const f = Filter.eq('status' as any, false);
+    const f = Filter.eq('status', false);
     expect(rt(f)).toEqual(f);
   });
 

@@ -124,8 +124,7 @@ describe('serialize → deserialize round-trip', () => {
   });
 
   it('boolean values round-trip', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const f = Filter.eq('status' as any, true);
+    const f = Filter.eq('status', true);
     expect(urlRoundTrip(f)).toEqual(f);
   });
 

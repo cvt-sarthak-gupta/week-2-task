@@ -1,57 +1,16 @@
 import type { PatientEntity } from './patient.entity';
+import type { PatientFilterDto, UpdatePatientDto } from './patient.types';
 import type { PatientRepository } from './patient.repository';
 import type { PaginatedResult } from '../../core/interfaces/repository.interface';
 import { NotFoundError, ConflictError } from '../../core/errors/index';
 import { deserializeFilter } from '../../core/filter/filter-deserializer';
 import { evaluateFilter } from '../../core/filter/filter-evaluator';
+import { PatientHelper } from './patient.helper';
 
 const IN_MEMORY_RECORD_CAP = 100_000;
 
-export interface UpdatePatientDto {
-  status?: PatientEntity['status'];
-  notes?: string;
-  assignedCoordinatorId?: string;
-  heartRate?: number;
-  bp?: string;
-  temp?: number;
-  o2sat?: number;
-}
-
-export interface PatientFilterDto {
-  status?: string;
-  ward?: string;
-  search?: string;
-  sort?: string;
-  filterAst?: string;
-}
-
-type SortEntry = { field: string; dir: 'ASC' | 'DESC' };
-
 export class PatientService {
   constructor(private readonly repo: PatientRepository) {}
-
-  private parseSortParts(sort: string): SortEntry[] {
-    return sort.split(',').flatMap((part) => {
-      const [field, dir] = part.split(':');
-      if (field && (dir === 'ASC' || dir === 'DESC')) return [{ field, dir }];
-      return [];
-    });
-  }
-
-  private applySortParts<T extends Record<string, unknown>>(items: T[], sortParts: SortEntry[]): T[] {
-    if (sortParts.length === 0) return items;
-    return [...items].sort((a, b) => {
-      for (const { field, dir } of sortParts) {
-        const av = a[field];
-        const bv = b[field];
-        let cmp = 0;
-        if (typeof av === 'string' && typeof bv === 'string') cmp = av.localeCompare(bv);
-        else if (typeof av === 'number' && typeof bv === 'number') cmp = av - bv;
-        if (cmp !== 0) return dir === 'ASC' ? cmp : -cmp;
-      }
-      return 0;
-    });
-  }
 
   async findAll(page = 1, limit = 20, filters: PatientFilterDto = {}): Promise<PaginatedResult<PatientEntity>> {
     if (filters.filterAst) {
@@ -62,11 +21,7 @@ export class PatientService {
     if (filters.status) where.status = filters.status as PatientEntity['status'];
     if (filters.ward) where.ward = filters.ward;
 
-    const sortParts = filters.sort ? this.parseSortParts(filters.sort) : [];
-    const order: Partial<Record<keyof PatientEntity, 'ASC' | 'DESC'>> =
-      sortParts.length > 0
-        ? Object.fromEntries(sortParts.map(({ field, dir }) => [field, dir])) as Partial<Record<keyof PatientEntity, 'ASC' | 'DESC'>>
-        : { updatedAt: 'DESC' };
+    const order = PatientHelper.buildOrder(filters.sort);
 
     const search = filters.search
       ? { term: filters.search, fields: ['firstName', 'lastName', 'mrn'] as (keyof PatientEntity)[] }
@@ -93,7 +48,10 @@ export class PatientService {
     let matched = items.data.filter((p) => evaluateFilter(ast, p as unknown as Record<string, unknown>));
 
     if (filters.sort) {
-      matched = this.applySortParts(matched as unknown as Record<string, unknown>[], this.parseSortParts(filters.sort)) as unknown as PatientEntity[];
+      matched = PatientHelper.applySortParts(
+        matched as unknown as Record<string, unknown>[],
+        PatientHelper.parseSortString(filters.sort),
+      ) as unknown as PatientEntity[];
     }
 
     const total = matched.length;
@@ -122,7 +80,10 @@ export class PatientService {
       const items = await this.repo.findAll({ page: 1, limit: IN_MEMORY_RECORD_CAP });
       let matched = items.data.filter((p) => evaluateFilter(ast, p as unknown as Record<string, unknown>));
       if (filters.sort) {
-        matched = this.applySortParts(matched as unknown as Record<string, unknown>[], this.parseSortParts(filters.sort)) as unknown as PatientEntity[];
+        matched = PatientHelper.applySortParts(
+          matched as unknown as Record<string, unknown>[],
+          PatientHelper.parseSortString(filters.sort),
+        ) as unknown as PatientEntity[];
       }
       return matched;
     }
@@ -131,11 +92,7 @@ export class PatientService {
     if (filters.status) where.status = filters.status as PatientEntity['status'];
     if (filters.ward) where.ward = filters.ward;
 
-    const sortParts = filters.sort ? this.parseSortParts(filters.sort) : [];
-    const order: Partial<Record<keyof PatientEntity, 'ASC' | 'DESC'>> =
-      sortParts.length > 0
-        ? Object.fromEntries(sortParts.map(({ field, dir }) => [field, dir])) as Partial<Record<keyof PatientEntity, 'ASC' | 'DESC'>>
-        : { updatedAt: 'DESC' };
+    const order = PatientHelper.buildOrder(filters.sort);
 
     const search = filters.search
       ? { term: filters.search, fields: ['firstName', 'lastName', 'mrn'] as (keyof PatientEntity)[] }

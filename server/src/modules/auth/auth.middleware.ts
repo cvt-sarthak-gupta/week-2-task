@@ -54,6 +54,7 @@ declare global {
   namespace Express {
     interface Request {
       ctx: RequestContext;
+      validatedData: Record<string, unknown>;
     }
   }
 }

@@ -1,4 +1,4 @@
-export type PatientStatus = 'critical' | 'stable' | 'discharged' | 'pending' | 'admitted';
+import type { PatientStatus, PatientSex } from './patient.types';
 
 export interface PatientEntity {
   id: string;
@@ -8,7 +8,7 @@ export interface PatientEntity {
   lastName: string;
   dob: string;
   age: number;
-  sex: 'M' | 'F' | 'other';
+  sex: PatientSex;
   status: PatientStatus;
   ward: string;
   assignedCoordinatorId: string;

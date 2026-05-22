@@ -54,10 +54,10 @@ seedPatients(patientStore);
 
 app.get('/healthz', (_req, res) => { res.status(200).json({ status: 'ok', ts: Date.now() }); });
 app.use('/auth', authLimiter, createAuthRouter());
-app.use('/', createPermissionsRouter());
-app.use('/patients', createPatientRouter(patientStore, combinedBroadcaster));
-app.use('/presets', createPresetsRouter());
-app.use('/', sseRouter);
+app.use(createPermissionsRouter());
+app.use(createPatientRouter(patientStore, combinedBroadcaster));
+app.use(createPresetsRouter());
+app.use(sseRouter);
 
 const VITALS_TENANTS = ['tenant-a', 'tenant-b', 'tenant-c'];
 const VITALS_PER_TICK = 15;
