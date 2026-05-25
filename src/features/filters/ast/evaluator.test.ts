@@ -115,6 +115,17 @@ describe('evaluate — null/undefined field (100% branch on compareValues null c
   });
 });
 
+describe('evaluate — exhaustive default branches', () => {
+  it('throws for an unknown compare op', () => {
+    const node = { kind: 'compare', field: 'age', op: '__unknown__', value: 1 } as unknown as Parameters<typeof evaluate>[0];
+    expect(() => evaluate(node, patient)).toThrow('Unhandled discriminated union value');
+  });
+  it('throws for an unknown node kind', () => {
+    const node = { kind: '__unknown__' } as unknown as Parameters<typeof evaluate>[0];
+    expect(() => evaluate(node, patient)).toThrow('Unhandled discriminated union value');
+  });
+});
+
 describe('evaluate — nested expressions', () => {
   it('NOT(AND(...)) works correctly', () => {
     const expr = Filter.not(Filter.and(Filter.eq('status', 'critical'), Filter.gt('age', 60)));

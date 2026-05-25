@@ -195,6 +195,11 @@ describe('deserialize — edge cases and error paths', () => {
     const node = Filter.eq('ward', 'path\\to');
     expect(roundTrip(node)).toEqual(node);
   });
+
+  it('throws for an unknown node kind in serialize', () => {
+    const node = { kind: '__unknown__' } as unknown as FilterNode;
+    expect(() => serialize(node)).toThrow('Unhandled discriminated union value');
+  });
 });
 
 function roundTrip(node: FilterNode): FilterNode {
