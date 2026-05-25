@@ -130,11 +130,24 @@ describe('StreamWorkerLogic — batch building', () => {
     expect(update.patch.o2sat).toBe(98);
   });
 
-  it('multiple vitals_updated events for the same entity all produce patches (bypasses version gate)', () => {
-    logic.processEvent({ type: 'vitals_updated', id: 'v1', entityId: 'p-1', version: 0, ts: Date.now(), payload: { heartRate: 72, bp: '120/80', temp: 36.6, o2sat: 98 } });
-    logic.processEvent({ type: 'vitals_updated', id: 'v2', entityId: 'p-1', version: 0, ts: Date.now(), payload: { heartRate: 75, bp: '122/82', temp: 36.7, o2sat: 97 } });
-    logic.processEvent({ type: 'vitals_updated', id: 'v3', entityId: 'p-1', version: 0, ts: Date.now(), payload: { heartRate: 78, bp: '118/78', temp: 36.5, o2sat: 99 } });
+  it('accepts multiple vitals_updated events with strictly increasing timestamps', () => {
+    const base = Date.now();
+    logic.processEvent({ type: 'vitals_updated', id: 'v1', entityId: 'p-1', version: 0, ts: base,     payload: { heartRate: 72, bp: '120/80', temp: 36.6, o2sat: 98 } });
+    logic.processEvent({ type: 'vitals_updated', id: 'v2', entityId: 'p-1', version: 0, ts: base + 1, payload: { heartRate: 75, bp: '122/82', temp: 36.7, o2sat: 97 } });
+    logic.processEvent({ type: 'vitals_updated', id: 'v3', entityId: 'p-1', version: 0, ts: base + 2, payload: { heartRate: 78, bp: '118/78', temp: 36.5, o2sat: 99 } });
     expect(logic.flushBatch()).toHaveLength(3);
+  });
+
+  it('drops vitals_updated events with stale or equal timestamps', () => {
+    const base = Date.now();
+    logic.processEvent({ type: 'vitals_updated', id: 'v1', entityId: 'p-1', version: 0, ts: base + 10, payload: { heartRate: 90, bp: '130/85', temp: 37, o2sat: 96 } });
+    // equal ts — rejected
+    logic.processEvent({ type: 'vitals_updated', id: 'v2', entityId: 'p-1', version: 0, ts: base + 10, payload: { heartRate: 80, bp: '120/80', temp: 36.5, o2sat: 98 } });
+    // older ts — rejected
+    logic.processEvent({ type: 'vitals_updated', id: 'v3', entityId: 'p-1', version: 0, ts: base + 5,  payload: { heartRate: 70, bp: '110/70', temp: 36.2, o2sat: 99 } });
+    const batch = logic.flushBatch();
+    expect(batch).toHaveLength(1);
+    expect(batch[0]!.patch.heartRate).toBe(90);
   });
 
   it('order_changed does NOT produce a patient patch', () => {

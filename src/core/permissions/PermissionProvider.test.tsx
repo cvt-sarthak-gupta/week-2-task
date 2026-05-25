@@ -18,18 +18,14 @@ const mockSetActive = vi.mocked(setActivePermissionSchema);
 // Helpers
 // ---------------------------------------------------------------------------
 const ALL_FLAGS_OFF: PermissionSchema['featureFlags'] = {
-  analyticsWidget: false,
   exportFeature: false,
   advancedFilters: false,
-  offlineSupport: false,
   presetSharing: false,
 };
 
 const ALL_FLAGS_ON: PermissionSchema['featureFlags'] = {
-  analyticsWidget: true,
   exportFeature: true,
   advancedFilters: true,
-  offlineSupport: true,
   presetSharing: true,
 };
 
@@ -124,7 +120,6 @@ describe('usePermissions — can()', () => {
   it('all flag-gated capabilities work correctly', () => {
     const flagGated: Array<[Capability, keyof PermissionSchema['featureFlags']]> = [
       ['exportPatients', 'exportFeature'],
-      ['viewAnalytics', 'analyticsWidget'],
       ['sharePresets', 'presetSharing'],
       ['managePresets', 'advancedFilters'],
     ];

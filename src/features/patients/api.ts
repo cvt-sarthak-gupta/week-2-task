@@ -1,5 +1,4 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { utils as xlsxUtils, writeFile as xlsxWriteFile } from 'xlsx';
+import { useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { apiFetch } from '@/core/api/client';
 import type { Patient, PaginatedResult } from '@/shared/types';
 import { queryKeys } from '@/core/api/queryKeys';
@@ -33,7 +32,8 @@ export function usePatients(
         try {
           const ast = deserializeUrl(filters.filter);
           filterFn = (p) => evaluate(ast, p);
-        } catch {
+        } catch (err) {
+          console.warn('[usePatients] filter parse failed, ignoring AST filter:', err);
         }
       }
       const result = patientRepo.findFiltered(tenantId, filters, pageParam as number, PATIENTS_PAGE_SIZE, filterFn);
@@ -55,7 +55,8 @@ export function usePatients(
               patientRepo.upsertMany(tenantId, serverResult.data);
               return serverResult;
             }
-          } catch {
+          } catch (err) {
+            console.error('[usePatients] server fallback fetch failed:', err);
           }
         }
       }
@@ -86,7 +87,7 @@ export function useUpdatePatientStatus(tenantId: string) {
       if (offlineStatus === 'offline') {
         const { queueRepo } = await getOfflineRepos();
         queueRepo.enqueue({
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+          id: crypto.randomUUID(),
           tenantId,
           entity: 'patient',
           entityId: patientId,
@@ -94,12 +95,15 @@ export function useUpdatePatientStatus(tenantId: string) {
           payload: { status },
           createdAt: Date.now(),
         });
-        const allCached = qc.getQueriesData<PaginatedResult<Patient>>({
+        const allCached = qc.getQueriesData<InfiniteData<PaginatedResult<Patient>>>({
           queryKey: queryKeys.patients.all(tenantId),
         });
-        for (const [, data] of allCached) {
-          const patient = data?.data.find((p) => p.id === patientId);
-          if (patient) return { ...patient, status };
+        for (const [, infiniteData] of allCached) {
+          if (!infiniteData) continue;
+          for (const page of infiniteData.pages) {
+            const patient = page.data.find((p) => p.id === patientId);
+            if (patient) return { ...patient, status };
+          }
         }
         throw new Error('Patient not found in cache');
       }
@@ -109,32 +113,43 @@ export function useUpdatePatientStatus(tenantId: string) {
         body: JSON.stringify({ status }),
         requiredCapability: 'editPatientStatus',
       });
-      void getOfflineRepos().then(({ patientRepo }) => patientRepo.upsert(tenantId, updated));
+      getOfflineRepos()
+        .then(({ patientRepo }) => patientRepo.upsert(tenantId, updated))
+        .catch((err: unknown) => { console.error('[offline] upsert failed after PATCH:', err); });
       return updated;
     },
 
     onMutate: async ({ patientId, status }) => {
       await qc.cancelQueries({ queryKey: queryKeys.patients.all(tenantId) });
 
-      const snapshots = qc.getQueriesData<PaginatedResult<Patient>>({
+      const snapshots = qc.getQueriesData<InfiniteData<PaginatedResult<Patient>>>({
         queryKey: queryKeys.patients.all(tenantId),
       });
 
-      qc.setQueriesData<PaginatedResult<Patient>>(
+      qc.setQueriesData<InfiniteData<PaginatedResult<Patient>>>(
         { queryKey: queryKeys.patients.all(tenantId) },
         (old) => {
           if (!old) return old;
-          return { ...old, data: old.data.map((p) => (p.id === patientId ? { ...p, status } : p)) };
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              data: page.data.map((p) => (p.id === patientId ? { ...p, status } : p)),
+            })),
+          };
         },
       );
 
       void getOfflineRepos().then(({ patientRepo }) => {
-        const allCached = qc.getQueriesData<PaginatedResult<Patient>>({
+        const allCached = qc.getQueriesData<InfiniteData<PaginatedResult<Patient>>>({
           queryKey: queryKeys.patients.all(tenantId),
         });
-        for (const [, data] of allCached) {
-          const patient = data?.data.find((p) => p.id === patientId);
-          if (patient) { patientRepo.upsert(tenantId, { ...patient, status }); break; }
+        outer: for (const [, infiniteData] of allCached) {
+          if (!infiniteData) continue;
+          for (const page of infiniteData.pages) {
+            const patient = page.data.find((p) => p.id === patientId);
+            if (patient) { patientRepo.upsert(tenantId, { ...patient, status }); break outer; }
+          }
         }
       });
 
@@ -166,7 +181,8 @@ export function useExportPatients(tenantId: string) {
         try {
           const node = deserializeUrl(filters.filter);
           qs.set('filterAst', serializeInternal(node));
-        } catch {
+        } catch (err) {
+          console.warn('[useExportPatients] filter parse failed, falling back to simple filters:', err);
           if (filters.status) qs.set('status', filters.status);
           if (filters.ward)   qs.set('ward',   filters.ward);
           if (filters.search) qs.set('search', filters.search);
@@ -200,6 +216,7 @@ export function useExportPatients(tenantId: string) {
         Notes: p.notes ?? '',
       }));
 
+      const { utils: xlsxUtils, writeFile: xlsxWriteFile } = await import('xlsx');
       const ws = xlsxUtils.json_to_sheet(rows);
       const wb = xlsxUtils.book_new();
       xlsxUtils.book_append_sheet(wb, ws, 'Patients');
@@ -230,7 +247,8 @@ export function buildServerPatientsUrl(
     try {
       const node = deserializeUrl(filters.filter);
       qs.set('filterAst', serializeInternal(node));
-    } catch {
+    } catch (err) {
+      console.warn('[buildServerPatientsUrl] filter parse failed, falling back to simple filters:', err);
       if (filters.status) qs.set('status', filters.status);
       if (filters.ward)   qs.set('ward',   filters.ward);
       if (filters.search) qs.set('search', filters.search);

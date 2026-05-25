@@ -5,7 +5,6 @@ import { useAuth } from '@/core/auth/AuthContext';
 
 const LoginPage = lazy(() => import('@/features/patients/LoginPage'));
 const PatientPage = lazy(() => import('@/features/patients/PatientPage'));
-const AnalyticsPage = lazy(() => import('@/features/patients/AnalyticsPage'));
 
 const Loader = () => (
   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -34,14 +33,6 @@ export const router = createBrowserRouter([
     element: (
       <RequireAuth>
         <Suspense fallback={<Loader />}><PatientPage /></Suspense>
-      </RequireAuth>
-    ),
-  },
-  {
-    path: '/analytics',
-    element: (
-      <RequireAuth>
-        <Suspense fallback={<Loader />}><AnalyticsPage /></Suspense>
       </RequireAuth>
     ),
   },

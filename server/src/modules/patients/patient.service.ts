@@ -2,8 +2,9 @@ import type { PatientEntity } from './patient.entity';
 import type { PatientFilterDto, UpdatePatientDto } from './patient.types';
 import type { PatientRepository } from './patient.repository';
 import type { PaginatedResult } from '../../core/interfaces/repository.interface';
-import { NotFoundError, ConflictError } from '../../core/errors/index';
+import { NotFoundError, ConflictError, ValidationError } from '../../core/errors/index';
 import { deserializeFilter } from '../../core/filter/filter-deserializer';
+import type { FilterNode } from '../../core/filter/filter-ast.types';
 import { evaluateFilter } from '../../core/filter/filter-evaluator';
 import { PatientHelper } from './patient.helper';
 
@@ -36,23 +37,29 @@ export class PatientService {
     });
   }
 
-  private async findAllByAst(page: number, limit: number, filters: PatientFilterDto): Promise<PaginatedResult<PatientEntity>> {
-    let ast;
+  private parseAst(filterAst: string): FilterNode {
     try {
-      ast = deserializeFilter(filters.filterAst!);
-    } catch {
-      return { data: [], total: 0, page, limit, totalPages: 0 };
+      return deserializeFilter(filterAst);
+    } catch (err) {
+      throw new ValidationError(`Invalid filterAst: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
 
-    const items = await this.repo.findAll({ page: 1, limit: IN_MEMORY_RECORD_CAP });
-    let matched = items.data.filter((p) => evaluateFilter(ast, p as unknown as Record<string, unknown>));
-
-    if (filters.sort) {
+  private applyAstFilter(items: PatientEntity[], ast: FilterNode, sort?: string): PatientEntity[] {
+    let matched = items.filter((p) => evaluateFilter(ast, p as unknown as Record<string, unknown>));
+    if (sort) {
       matched = PatientHelper.applySortParts(
         matched as unknown as Record<string, unknown>[],
-        PatientHelper.parseSortString(filters.sort),
+        PatientHelper.parseSortString(sort),
       ) as unknown as PatientEntity[];
     }
+    return matched;
+  }
+
+  private async findAllByAst(page: number, limit: number, filters: PatientFilterDto): Promise<PaginatedResult<PatientEntity>> {
+    const ast = this.parseAst(filters.filterAst!);
+    const items = await this.repo.findAll({ page: 1, limit: IN_MEMORY_RECORD_CAP });
+    const matched = this.applyAstFilter(items.data, ast, filters.sort);
 
     const total = matched.length;
     const start = (page - 1) * limit;
@@ -71,21 +78,9 @@ export class PatientService {
 
   async exportAll(filters: PatientFilterDto = {}): Promise<PatientEntity[]> {
     if (filters.filterAst) {
-      let ast;
-      try {
-        ast = deserializeFilter(filters.filterAst);
-      } catch {
-        return [];
-      }
+      const ast = this.parseAst(filters.filterAst);
       const items = await this.repo.findAll({ page: 1, limit: IN_MEMORY_RECORD_CAP });
-      let matched = items.data.filter((p) => evaluateFilter(ast, p as unknown as Record<string, unknown>));
-      if (filters.sort) {
-        matched = PatientHelper.applySortParts(
-          matched as unknown as Record<string, unknown>[],
-          PatientHelper.parseSortString(filters.sort),
-        ) as unknown as PatientEntity[];
-      }
-      return matched;
+      return this.applyAstFilter(items.data, ast, filters.sort);
     }
 
     const where: Partial<PatientEntity> = {};

@@ -15,10 +15,8 @@ const ALL_COLUMNS: readonly ColumnDef[] = [
 const makeSchema = (layout: PermissionSchema['layout']): PermissionSchema => ({
   capabilities: ['viewPatients'],
   featureFlags: {
-    analyticsWidget: false,
     exportFeature: false,
     advancedFilters: false,
-    offlineSupport: false,
     presetSharing: false,
   },
   layout,

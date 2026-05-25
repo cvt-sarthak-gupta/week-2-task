@@ -8,10 +8,8 @@ const makeSchema = (
 ): PermissionSchema => ({
   capabilities,
   featureFlags: {
-    analyticsWidget: false,
     exportFeature: false,
     advancedFilters: false,
-    offlineSupport: false,
     presetSharing: false,
     ...flags,
   },
@@ -65,14 +63,6 @@ describe('canWithFlag', () => {
   it('flag on but no capability — returns false', () => {
     const flagOnly = makeSchema([], { exportFeature: true });
     expect(canWithFlag(flagOnly, 'exportPatients')).toBe(false);
-  });
-
-  it('viewAnalytics requires analyticsWidget flag', () => {
-    const schema = makeSchema(['viewAnalytics'], { analyticsWidget: false });
-    expect(canWithFlag(schema, 'viewAnalytics')).toBe(false);
-
-    const schemaOn = makeSchema(['viewAnalytics'], { analyticsWidget: true });
-    expect(canWithFlag(schemaOn, 'viewAnalytics')).toBe(true);
   });
 
   it('sharePresets requires presetSharing flag', () => {

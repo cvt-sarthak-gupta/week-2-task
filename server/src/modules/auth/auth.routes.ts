@@ -14,7 +14,7 @@ const DEMO_USERS = [
   {
     id: 'u2', tenantId: 'tenant-a', email: 'admin@tenant-a.com',
     passwordHash: DEMO_PASSWORD_HASH, role: 'admin',
-    capabilities: ['viewPatients', 'editPatientStatus', 'editPatientNotes', 'viewAlerts', 'managePresets', 'exportPatients', 'viewAnalytics', 'manageUsers', 'viewAuditLog', 'assignCoordinator', 'dischargePatient', 'sharePresets', 'manageFeatureFlags', 'dismissAlerts'],
+    capabilities: ['viewPatients', 'editPatientStatus', 'editPatientNotes', 'viewAlerts', 'managePresets', 'exportPatients', 'manageUsers', 'viewAuditLog', 'assignCoordinator', 'dischargePatient', 'sharePresets', 'manageFeatureFlags', 'dismissAlerts'],
   },
   {
     id: 'u3', tenantId: 'tenant-a', email: 'readonly@tenant-a.com',
@@ -30,6 +30,14 @@ const DEMO_USERS = [
 
 function toExpiry(raw: string | undefined, fallback: string): NonNullable<SignOptions['expiresIn']> {
   return (raw ?? fallback) as NonNullable<SignOptions['expiresIn']>;
+}
+
+interface RefreshPayload {
+  sub: string;
+}
+
+function isRefreshPayload(p: unknown): p is RefreshPayload {
+  return !!p && typeof p === 'object' && typeof (p as Record<string, unknown>)['sub'] === 'string';
 }
 const ACCESS_TOKEN_EXPIRY  = toExpiry(process.env['ACCESS_TOKEN_EXPIRY'],  '5m');
 const REFRESH_TOKEN_EXPIRY = toExpiry(process.env['REFRESH_TOKEN_EXPIRY'], '7d');
@@ -75,17 +83,22 @@ export function createAuthRouter(): Router {
 
   router.post('/refresh', (req, res) => {
     const cookieHeader = req.headers.cookie ?? '';
-    const refreshToken = cookieHeader
+    const rawCookie = cookieHeader
       .split(';')
       .map((c) => c.trim())
       .find((c) => c.startsWith('refresh_token='))
       ?.slice('refresh_token='.length);
+    const refreshToken = rawCookie ? decodeURIComponent(rawCookie) : undefined;
 
     if (!refreshToken) { res.status(401).json({ status: 'error', message: 'No refresh token' }); return; }
 
     try {
-      const payload = jwt.verify(refreshToken, JWT_SECRET) as { sub: string };
-      const user = DEMO_USERS.find((u) => u.id === payload.sub);
+      const rawPayload = jwt.verify(refreshToken, JWT_SECRET);
+      if (!isRefreshPayload(rawPayload)) {
+        res.status(401).json({ status: 'error', message: 'Invalid refresh token payload' });
+        return;
+      }
+      const user = DEMO_USERS.find((u) => u.id === rawPayload.sub);
       if (!user) { res.status(401).json({ status: 'error', message: 'User not found' }); return; }
 
       const accessToken = jwt.sign(

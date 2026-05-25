@@ -95,7 +95,8 @@ export function usePatientBootstrap(tenantId: string): BootstrapState {
           startTransition(() => {
             qc.invalidateQueries({ queryKey: queryKeys.patients.all(tenantId) });
           });
-        } catch {
+        } catch (err) {
+          console.error('[usePatientBootstrap] viewport prefetch failed:', err);
         }
       }
 

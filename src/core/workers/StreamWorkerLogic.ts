@@ -8,6 +8,7 @@ export class StreamWorkerLogic {
   private readonly dedupCache: string[] = [];
   private readonly dedupSet = new Set<string>();
   private readonly entityVersions = new Map<string, number>();
+  private readonly entityVitalTs = new Map<string, number>();
   private pendingBatch: PatientUpdate[] = [];
 
   addToDedup(id: string): boolean {
@@ -26,6 +27,9 @@ export class StreamWorkerLogic {
     if (!this.addToDedup(event.id)) return;
 
     if (event.type === 'vitals_updated') {
+      const lastTs = this.entityVitalTs.get(event.entityId) ?? -1;
+      if (event.ts <= lastTs) return;
+      this.entityVitalTs.set(event.entityId, event.ts);
       this.pendingBatch.push({
         id: event.entityId,
         patch: {
@@ -92,6 +96,7 @@ export class StreamWorkerLogic {
     this.dedupCache.length = 0;
     this.dedupSet.clear();
     this.entityVersions.clear();
+    this.entityVitalTs.clear();
     this.pendingBatch = [];
   }
 }

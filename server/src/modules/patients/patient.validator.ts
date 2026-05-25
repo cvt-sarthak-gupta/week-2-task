@@ -12,11 +12,11 @@ export default class PatientValidator extends BaseValidator {
         page: z.coerce.number().int().positive().optional().default(1),
         limit: z.coerce.number().int().positive().max(200).optional().default(20),
         since: z.coerce.number().optional(),
-        status: z.string().optional(),
-        ward: z.string().optional(),
-        search: z.string().optional(),
-        sort: z.string().optional(),
-        filterAst: z.string().optional(),
+        status: z.enum(STATUS_VALUES).optional(),
+        ward: z.string().max(100).optional(),
+        search: z.string().max(200).optional(),
+        sort: z.string().max(200).optional(),
+        filterAst: z.string().max(2000).optional(),
       }),
 
       stream: z.object({
@@ -24,11 +24,11 @@ export default class PatientValidator extends BaseValidator {
       }),
 
       export: z.object({
-        status: z.string().optional(),
-        ward: z.string().optional(),
-        search: z.string().optional(),
-        sort: z.string().optional(),
-        filterAst: z.string().optional(),
+        status: z.enum(STATUS_VALUES).optional(),
+        ward: z.string().max(100).optional(),
+        search: z.string().max(200).optional(),
+        sort: z.string().max(200).optional(),
+        filterAst: z.string().max(2000).optional(),
       }),
 
       id: z.object({ id: z.string().min(1) }).strict(),

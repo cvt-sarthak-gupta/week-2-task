@@ -134,16 +134,109 @@ test.describe('Patient page — saved filter presets', () => {
   });
 });
 
-// ─── Export button permission gate ──────────────────────────────────────────
+// ─── Role-Based UI Composition (Feature 4 integration tests) ────────────────
+// Each block validates a different role schema → UI composition mapping.
+// These tests confirm that permission gates remove elements from the DOM
+// (not just hide them with CSS) for unauthorized users.
 
-test.describe('Patient page — RBAC gates', () => {
+test.describe('Patient page — RBAC gates (admin role)', () => {
+  test.beforeEach(async ({ page }) => { await loginAs(page, 'admin'); });
+
   test('admin sees Export button', async ({ page }) => {
-    await loginAs(page, 'admin');
     await expect(page.getByRole('button', { name: /export/i })).toBeVisible();
   });
 
-  test('viewer does not see Export button', async ({ page }) => {
-    await loginAs(page, 'viewer');
+  test('admin sees Presets panel button', async ({ page }) => {
+    await expect(page.getByRole('button', { name: /presets/i })).toBeVisible();
+  });
+});
+
+test.describe('Patient page — RBAC gates (coordinator role)', () => {
+  test.beforeEach(async ({ page }) => { await loginAs(page, 'coordinator'); });
+
+  test('coordinator sees Export button (has exportPatients capability)', async ({ page }) => {
+    await expect(page.getByRole('button', { name: /export/i })).toBeVisible();
+  });
+
+  test('coordinator sees Presets panel button (has managePresets capability)', async ({ page }) => {
+    await expect(page.getByRole('button', { name: /presets/i })).toBeVisible();
+  });
+});
+
+test.describe('Patient page — RBAC gates (readonly/viewer role)', () => {
+  test.beforeEach(async ({ page }) => { await loginAs(page, 'viewer'); });
+
+  test('viewer does not see Export button — element absent from DOM', async ({ page }) => {
+    // Gate removes the element entirely; it must not exist in the DOM at all
     await expect(page.getByRole('button', { name: /export/i })).not.toBeVisible();
+  });
+
+  test('viewer does not see Presets panel button — element absent from DOM', async ({ page }) => {
+    await expect(page.getByRole('button', { name: /presets/i })).not.toBeVisible();
+  });
+
+  test('viewer can still view and scroll the patient table', async ({ page }) => {
+    // Read-only users must not be locked out of the grid itself
+    await expect(page.getByRole('columnheader', { name: /mrn/i })).toBeVisible();
+    const rows = page.locator('[role="row"]:not([aria-rowindex="1"])');
+    await expect(rows.first()).toBeVisible({ timeout: 5_000 });
+  });
+});
+
+// ─── Export action ───────────────────────────────────────────────────────────
+
+test.describe('Patient page — export', () => {
+  test.beforeEach(async ({ page }) => { await loginAs(page, 'admin'); });
+
+  test('Export button triggers an .xlsx download with active filters applied', async ({ page }) => {
+    // Apply a status filter so the export reflects current filter state
+    await page.getByRole('combobox', { name: /filter by status/i }).click();
+    await page.waitForSelector('.ant-select-dropdown:not(.ant-select-dropdown-hidden)', { timeout: 3_000 });
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(300);
+
+    // Register download listener before clicking so we don't miss the event
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: /export/i }).click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toMatch(/^patients_export_\d{4}-\d{2}-\d{2}\.xlsx$/);
+  });
+});
+
+// ─── Shared filter presets ───────────────────────────────────────────────────
+
+test.describe('Patient page — shared filter presets', () => {
+  test('a preset saved as shared is visible to another user in the same tenant', async ({ page }) => {
+    const sharedPresetName = `E2E Shared Preset ${Date.now()}`;
+
+    // Admin saves a preset with "Share with team" enabled
+    await loginAs(page, 'admin');
+    await page.getByRole('combobox', { name: /filter by status/i }).click();
+    await page.waitForSelector('.ant-select-dropdown:not(.ant-select-dropdown-hidden)', { timeout: 3_000 });
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+
+    await page.getByRole('button', { name: /save current filters/i }).click();
+    await page.getByRole('textbox', { name: /preset name/i }).fill(sharedPresetName);
+    await page.getByRole('switch', { name: /share this preset with your team/i }).click();
+    await page.getByRole('button', { name: /^save$/i }).click();
+
+    // Sign out and log in as a coordinator (different user, same tenant)
+    await page.getByRole('button', { name: /sign out/i }).click();
+    await page.waitForURL(/\/login/);
+    await loginAs(page, 'coordinator');
+
+    // Coordinator opens the preset panel — shared preset must appear
+    await page.getByRole('button', { name: /load a saved filter preset/i }).click();
+    await expect(page.getByText(sharedPresetName)).toBeVisible({ timeout: 3_000 });
+
+    // Cleanup: delete the preset as admin
+    await page.getByRole('button', { name: /sign out/i }).click();
+    await page.waitForURL(/\/login/);
+    await loginAs(page, 'admin');
+    await page.getByRole('button', { name: /load a saved filter preset/i }).click();
+    await page.getByRole('button', { name: new RegExp(`delete preset ${sharedPresetName}`, 'i') }).click();
   });
 });

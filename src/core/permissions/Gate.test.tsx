@@ -7,10 +7,8 @@ import type { PermissionSchema } from './schema';
 const makeSchema = (caps: PermissionSchema['capabilities']): PermissionSchema => ({
   capabilities: caps,
   featureFlags: {
-    analyticsWidget: true,
     exportFeature: true,
     advancedFilters: true,
-    offlineSupport: true,
     presetSharing: true,
   },
   layout: { visibleColumns: [], sideWidgets: [], actionBar: [] },

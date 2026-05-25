@@ -69,7 +69,12 @@ export function HeaderRow({ columns, widths, sortState, onSort, onResize }: Head
         tabIndex={col.sortable ? 0 : -1}
         onKeyDown={(e) => e.key === 'Enter' && col.sortable && onSort(col.field)}
       >
-        <span>{col.label}</span>
+        {col.label
+          ? <span>{col.label}</span>
+          : <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
+              {col.field === '__expand' ? 'Expand or collapse row' : col.field}
+            </span>
+        }
         {col.sortable && entry && (
           <>
             {entry.dir === 'asc' ? <CaretUpOutlined aria-hidden /> : <CaretDownOutlined aria-hidden />}

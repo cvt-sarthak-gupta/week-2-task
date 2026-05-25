@@ -25,7 +25,8 @@ function loadCachedConfig(): PermissionSchema | null {
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     return isValidPermissionSchema(parsed) ? parsed : null;
-  } catch {
+  } catch (err) {
+    console.warn('[useBootstrap] Failed to parse cached permission config:', err);
     return null;
   }
 }
@@ -34,7 +35,8 @@ function saveConfigCache(config: PermissionSchema, version: string): void {
   try {
     localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(config));
     localStorage.setItem(CONFIG_VERSION_KEY, version);
-  } catch {
+  } catch (err) {
+    console.warn('[useBootstrap] failed to save permission config to localStorage:', err);
   }
 }
 
@@ -42,13 +44,19 @@ export function useBootstrap(userId: string | null) {
   return useQuery({
     queryKey: queryKeys.permissions.config(userId ?? ''),
     queryFn: async (): Promise<PermissionSchema> => {
-      const res = await apiFetch<{ config: PermissionSchema; version: string }>('/me/config');
-      saveConfigCache(res.config, res.version);
-      return res.config;
+      try {
+        const res = await apiFetch<{ config: PermissionSchema; version: string }>('/me/config');
+        saveConfigCache(res.config, res.version);
+        return res.config;
+      } catch (err) {
+        console.error('[useBootstrap] Failed to fetch permission config from /me/config:', err);
+        throw err;
+      }
     },
     enabled: userId !== null,
     staleTime: 5 * 60 * 1000,
     placeholderData: () => loadCachedConfig() ?? DEFAULT_PERMISSION_SCHEMA,
+    refetchOnMount: true,
     retry: 2,
   });
 }

@@ -101,6 +101,20 @@ export function useUpdatePreset(tenantId: string, userId: string) {
         break;
 
       case 'save_as_new': {
+        const { localPayload } = conflict;
+        apiFetch<FilterPreset>('/presets', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: resolution.name,
+            filterAst: localPayload.filterAst,
+            isShared: localPayload.isShared,
+          }),
+        }).then(() => {
+          void qc.invalidateQueries({ queryKey: queryKeys.presets.all(tenantId, userId) });
+        }).catch((err: unknown) => {
+          console.error('[useUpdatePreset] save_as_new create failed:', err);
+          notification.error({ message: 'Failed to save preset as new' });
+        });
         setConflict(null);
         setPendingPayload(null);
         break;

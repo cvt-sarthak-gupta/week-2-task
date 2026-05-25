@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getOfflineRepos } from '@/core/offline/db/repos';
+import { apiFetch } from '@/core/api/client';
 import { Button, Layout, Space, Spin, Typography, Alert, Badge } from 'antd';
-import { LogoutOutlined, WifiOutlined } from '@ant-design/icons';
+import { LogoutOutlined, WifiOutlined, SettingOutlined } from '@ant-design/icons';
+import { ColumnVisibilityPanel } from '@/features/admin/ColumnVisibilityPanel';
+import { FeatureFlagPanel } from '@/features/admin/FeatureFlagPanel';
 import { useAuth } from '@/core/auth/AuthContext';
 import { usePatients, useExportPatients, PATIENTS_PAGE_SIZE } from './api';
 import { useRealtimePatients } from './useRealtimePatients';
@@ -58,6 +61,9 @@ export default function PatientPage() {
   const { filters, setFilter, setSort, setFilterAst, parsedFilterAst, clearFilters, hasActiveFilters } = usePatientFilters();
   const canShare = useCan('sharePresets');
   const canExport = useCan('exportPatients');
+  const canManageFlags = useCan('manageFeatureFlags');
+  const [flagsPanelOpen, setFlagsPanelOpen] = useState(false);
+  const [featureFlagPanelOpen, setFeatureFlagPanelOpen] = useState(false);
   const exportMutation = useExportPatients(tenantId);
   const userId = user?.id ?? '';
   const { data: presets = [] } = usePresets(tenantId, userId);
@@ -139,7 +145,8 @@ export default function PatientPage() {
       try {
         const node: FilterNode = deserializeFilter(filterAst);
         setFilterAst(node);
-      } catch {
+      } catch (err) {
+        console.error('[PatientPage] Failed to deserialize preset filter AST:', err);
       }
     },
     [setFilterAst],
@@ -147,20 +154,9 @@ export default function PatientPage() {
 
   const handleResolvePresetConflict = useCallback(
     (resolution: import('./presets/PresetConflictModal').ConflictResolution) => {
-      if (!presetConflict) return;
-
-      if (resolution.action === 'save_as_new') {
-        createPreset.mutate({
-          name: resolution.name,
-          filterAst: presetConflict.localPayload.filterAst,
-          isShared: presetConflict.localPayload.isShared,
-        });
-        dismissConflict();
-      } else {
-        resolveConflict(resolution);
-      }
+      resolveConflict(resolution);
     },
-    [presetConflict, createPreset, resolveConflict, dismissConflict],
+    [resolveConflict],
   );
 
   const waitingForInitialData = serverRows.length === 0 && bootstrap.phase !== 'complete' && bootstrap.phase !== 'error';
@@ -205,6 +201,24 @@ export default function PatientPage() {
             }
             aria-label={`Connection status: ${connStatus}`}
           />
+          {canManageFlags && (
+            <>
+              <Button
+                icon={<SettingOutlined aria-hidden />}
+                onClick={() => setFlagsPanelOpen(true)}
+                aria-label="Manage visible table columns"
+              >
+                Manage Columns
+              </Button>
+              <Button
+                icon={<SettingOutlined aria-hidden />}
+                onClick={() => setFeatureFlagPanelOpen(true)}
+                aria-label="Manage feature flags"
+              >
+                Feature Flags
+              </Button>
+            </>
+          )}
           <Button icon={<LogoutOutlined aria-hidden />} onClick={() => void logout()} aria-label="Sign out">
             Sign Out
           </Button>
@@ -263,10 +277,19 @@ export default function PatientPage() {
       <ConflictModal
         conflicts={syncConflicts}
         onResolve={(entry, resolution) => {
-          void getOfflineRepos().then(({ queueRepo }) => {
-            if (resolution === 'use_server') {
-              queueRepo.markSynced(entry.id);
+          void getOfflineRepos().then(async ({ queueRepo, patientRepo }) => {
+            if (resolution === 'keep_mine') {
+              try {
+                const updated = await apiFetch<import('@/shared/types').Patient>(
+                  `/patients/${entry.entityId}`,
+                  { method: 'PATCH', body: JSON.stringify(entry.payload), requiredCapability: 'editPatientStatus' },
+                );
+                patientRepo.upsert(entry.tenantId, updated);
+              } catch (err) {
+                console.error('[ConflictModal] keep_mine force-apply failed:', err);
+              }
             }
+            queueRepo.markSynced(entry.id);
           });
           setSyncConflicts((prev) => prev.filter((c) => c.entry.id !== entry.id));
         }}
@@ -274,6 +297,21 @@ export default function PatientPage() {
       />
 
       <PresetConflictModal conflict={presetConflict} onResolve={handleResolvePresetConflict} onDismiss={dismissConflict} />
+
+      {canManageFlags && (
+        <ColumnVisibilityPanel
+          userId={userId}
+          open={flagsPanelOpen}
+          onClose={() => setFlagsPanelOpen(false)}
+        />
+      )}
+      {canManageFlags && (
+        <FeatureFlagPanel
+          userId={userId}
+          open={featureFlagPanelOpen}
+          onClose={() => setFeatureFlagPanelOpen(false)}
+        />
+      )}
     </Layout>
   );
 }

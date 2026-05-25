@@ -42,6 +42,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
       tenantId: raw.tenantId,
       currentUser: { id: raw.sub, email: raw.email, role: raw.role },
       currentRole: raw.role,
+      capabilities: Array.isArray(raw.capabilities) ? raw.capabilities : [],
     };
     next();
   } catch (err) {

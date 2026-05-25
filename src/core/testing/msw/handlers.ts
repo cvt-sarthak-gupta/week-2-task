@@ -46,10 +46,8 @@ export const handlers = [
       config: {
         capabilities: ['viewPatients', 'editPatientStatus', 'editPatientNotes', 'viewAlerts', 'managePresets', 'exportPatients'],
         featureFlags: {
-          analyticsWidget: false,
           exportFeature: true,
           advancedFilters: true,
-          offlineSupport: true,
           presetSharing: false,
         },
         layout: {
@@ -100,6 +98,23 @@ export const handlers = [
       },
     });
     return new HttpResponse(stream, { headers: { 'Content-Type': 'application/x-ndjson' } });
+  }),
+
+  http.patch('/api/admin/feature-flags', async ({ request }) => {
+    const body = await request.json() as Record<string, boolean>;
+    return HttpResponse.json({
+      featureFlags: {
+        exportFeature: true,
+        advancedFilters: true,
+        presetSharing: false,
+        ...body,
+      },
+    });
+  }),
+
+  http.patch('/api/admin/layout/columns', async ({ request }) => {
+    const body = await request.json() as { role: string; columns: Record<string, boolean> };
+    return HttpResponse.json({ visibleColumns: Object.entries(body.columns).map(([field, visible]) => ({ field, label: field, visible })) });
   }),
 
   http.get('/api/healthz', () => new HttpResponse(null, { status: 200 })),

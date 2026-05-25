@@ -8,10 +8,8 @@ const makeSchema = (
 ): PermissionSchema => ({
   capabilities: caps,
   featureFlags: {
-    analyticsWidget: false,
     exportFeature: false,
     advancedFilters: false,
-    offlineSupport: false,
     presetSharing: false,
     ...flags,
   },
@@ -46,12 +44,11 @@ describe('apiFetch — client-side pre-flight capability checks', () => {
 
   it('throws for all flag-gated capabilities when flags are off', async () => {
     const schema = makeSchema(
-      ['viewAnalytics', 'sharePresets', 'managePresets'],
-      { analyticsWidget: false, presetSharing: false, advancedFilters: false },
+      ['sharePresets', 'managePresets'],
+      { presetSharing: false, advancedFilters: false },
     );
     setActivePermissionSchema(schema);
 
-    await expect(apiFetch('/analytics', { requiredCapability: 'viewAnalytics' })).rejects.toThrow(CapabilityDeniedError);
     await expect(apiFetch('/presets/share', { requiredCapability: 'sharePresets' })).rejects.toThrow(CapabilityDeniedError);
     await expect(apiFetch('/presets', { requiredCapability: 'managePresets' })).rejects.toThrow(CapabilityDeniedError);
   });

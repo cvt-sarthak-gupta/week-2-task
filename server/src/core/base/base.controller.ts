@@ -29,7 +29,7 @@ export abstract class BaseController {
       return;
     }
     console.error('[BaseController] Unhandled error:', error instanceof Error ? error.stack : error);
-    const e = new UnprocessableEntityError((error as Error).message ?? 'Unknown error');
+    const e = new UnprocessableEntityError('An unexpected error occurred');
     res.status(e.statusCode).json(e.json());
   }
 }

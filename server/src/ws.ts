@@ -1,4 +1,4 @@
-import { WebSocketServer, type WebSocket } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'node:http';
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from './modules/auth/auth.middleware';
@@ -46,6 +46,7 @@ export function setupWebSocket(httpServer: Server): EventBroadcaster {
           ws.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
         }
       } catch {
+        console.error('[ws] invalid message from client:', data.toString().slice(0, 200));
       }
     });
   });
@@ -55,7 +56,7 @@ export function setupWebSocket(httpServer: Server): EventBroadcaster {
       const payload = JSON.stringify(event);
       for (const client of wss.clients) {
         const sock = client as AuthenticatedSocket;
-        if (sock.readyState === 1 && sock.tenantId === event.tenantId) {
+        if (sock.readyState === WebSocket.OPEN && sock.tenantId === event.tenantId) {
           sock.send(payload);
         }
       }

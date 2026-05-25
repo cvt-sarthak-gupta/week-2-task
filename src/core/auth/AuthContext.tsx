@@ -68,7 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(userFromToken(data.accessToken));
           }
         }
-      } catch {
+      } catch (err) {
+        console.warn('[AuthContext] initial refresh failed:', err);
       } finally {
         if (!cancelled) setIsBootstrapping(false);
       }

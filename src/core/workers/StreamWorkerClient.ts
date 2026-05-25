@@ -8,7 +8,6 @@ type BatchCb = (updates: readonly PatientUpdate[]) => void;
 export class StreamWorkerClient {
   private worker: Worker | null = null;
   private fallbackLogic: StreamWorkerLogic | null = null;
-  private fallbackFlushId: ReturnType<typeof setTimeout> | null = null;
   private readonly batchCbs = new Set<BatchCb>();
   private pendingUpdates: PatientUpdate[] = [];
   private rafId: number | null = null;
@@ -43,6 +42,12 @@ export class StreamWorkerClient {
       return;
     }
     if (this.fallbackLogic) {
+      if (event.type === 'order_changed' || event.type === 'alert_raised') {
+        if (this.fallbackLogic.addToDedup(event.id)) {
+          eventBus.publish(event);
+        }
+        return;
+      }
       this.fallbackLogic.processEvent(event);
       this.scheduleFallbackFlush();
     } else {
@@ -69,10 +74,6 @@ export class StreamWorkerClient {
     this.worker = null;
     this.fallbackLogic?.reset();
     this.fallbackLogic = null;
-    if (this.fallbackFlushId !== null) {
-      clearTimeout(this.fallbackFlushId);
-      this.fallbackFlushId = null;
-    }
     if (this.rafId !== null) {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
@@ -96,14 +97,10 @@ export class StreamWorkerClient {
   }
 
   private scheduleFallbackFlush(): void {
-    if (this.fallbackFlushId !== null) return;
-    this.fallbackFlushId = setTimeout(() => {
-      this.fallbackFlushId = null;
-      if (!this.fallbackLogic?.hasPending()) return;
-      const updates = this.fallbackLogic.flushBatch();
-      this.pendingUpdates.push(...updates);
-      this.scheduleRafFlush();
-    }, 0);
+    if (!this.fallbackLogic?.hasPending()) return;
+    const updates = this.fallbackLogic.flushBatch();
+    this.pendingUpdates.push(...updates);
+    this.scheduleRafFlush();
   }
 
   private handleWorkerMessage(msg: WorkerResponse): void {

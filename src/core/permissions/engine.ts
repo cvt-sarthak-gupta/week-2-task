@@ -10,7 +10,6 @@ export function isFeatureEnabled(schema: PermissionSchema, flag: FeatureFlagKey)
 
 const CAPABILITY_FLAG_MAP: Partial<Record<Capability, FeatureFlagKey>> = {
   exportPatients: 'exportFeature',
-  viewAnalytics: 'analyticsWidget',
   sharePresets: 'presetSharing',
   managePresets: 'advancedFilters',
 };

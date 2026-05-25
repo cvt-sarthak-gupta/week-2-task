@@ -73,11 +73,9 @@ describe('PatientService', () => {
       expect(result.data[0]?.status).toBe('critical');
     });
 
-    it('returns empty results on malformed filterAst', async () => {
+    it('throws ValidationError on malformed filterAst', async () => {
       const { service } = makeService();
-      const result = await service.findAll(1, 20, { filterAst: 'broken!!!' });
-      expect(result.data).toHaveLength(0);
-      expect(result.total).toBe(0);
+      await expect(service.findAll(1, 20, { filterAst: 'broken!!!' })).rejects.toThrow('Invalid filterAst');
     });
   });
 
@@ -118,10 +116,9 @@ describe('PatientService', () => {
       expect(result).toHaveLength(10);
     });
 
-    it('returns empty array on malformed filterAst', async () => {
+    it('throws ValidationError on malformed filterAst', async () => {
       const { service } = makeService();
-      const result = await service.exportAll({ filterAst: '!!! bad' });
-      expect(result).toEqual([]);
+      await expect(service.exportAll({ filterAst: '!!! bad' })).rejects.toThrow('Invalid filterAst');
     });
   });
 });

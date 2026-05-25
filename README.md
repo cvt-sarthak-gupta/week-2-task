@@ -110,7 +110,7 @@ See [`docs/ADR-0002-filter-expression-system.md`](docs/ADR-0002-filter-expressio
 
 ### Feature 6 — Quality
 - **TypeScript**: strict, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`
-- **Tests**: 89 unit/integration tests; 100% branch coverage enforced on filter AST, queue, diff
+- **Tests**: 578 unit/integration tests (525 frontend + 53 backend); 100% branch coverage enforced on filter AST, queue, diff
 - **Benchmarks**: 50k-row Fenwick init < 2ms; `getVisibleRange` < 1ms
 - **Bundle budget**: Vite plugin fails production build over 100KB gzip on initial chunk
 - **Accessibility**: `vitest-axe` in component tests; full keyboard navigation; icons+text+color for status

@@ -75,7 +75,7 @@ export class PatientController extends BaseController {
       const patient = await this.service.update(id, dto, body.version);
 
       this.broadcaster.broadcast({
-        id: `evt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        id: crypto.randomUUID(),
         type: 'patient_updated',
         entityId: id,
         tenantId: req.ctx.tenantId,

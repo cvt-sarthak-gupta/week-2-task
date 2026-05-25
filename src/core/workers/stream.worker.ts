@@ -4,10 +4,10 @@ import { StreamWorkerLogic } from './StreamWorkerLogic';
 import type { DataEvent } from '../realtime/events.types';
 
 const logic = new StreamWorkerLogic();
-let rafScheduled = false;
+let batchPending = false;
 
 function flushBatch(): void {
-  rafScheduled = false;
+  batchPending = false;
   if (!logic.hasPending()) return;
   const updates = logic.flushBatch();
   const msg: WorkerResponse = { type: 'batch_update', updates, frameTs: Date.now() };
@@ -30,14 +30,16 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
         event.type === 'order_changed' ||
         event.type === 'alert_raised'
       ) {
-        self.postMessage({ type: 'passthrough_event', event } satisfies WorkerResponse);
+        if (logic.addToDedup(event.id)) {
+          self.postMessage({ type: 'passthrough_event', event } satisfies WorkerResponse);
+        }
         break;
       }
 
       logic.processEvent(event);
 
-      if (!rafScheduled && logic.hasPending()) {
-        rafScheduled = true;
+      if (!batchPending && logic.hasPending()) {
+        batchPending = true;
         setTimeout(flushBatch, 0);
       }
       break;

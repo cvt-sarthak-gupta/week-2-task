@@ -77,31 +77,26 @@ test.describe('Virtualized Grid — keyboard navigation', () => {
 });
 
 // ─── Large-dataset scroll test ────────────────────────────────────────────────
-// Requires the dev server to seed with enough patients (>200) — skipped in CI
-// unless RUN_LARGE_SCROLL_TEST=1 is set.
+// Requires the dev server to seed 50,000 patients per tenant (always true — server
+// seeds 50,000 rows per tenant on startup).
 
 test.describe('Virtualized Grid — large dataset scroll', () => {
-  test.skip(!process.env['RUN_LARGE_SCROLL_TEST'], 'Large scroll test skipped — set RUN_LARGE_SCROLL_TEST=1 to enable');
 
-  test('can scroll to the bottom of a 200-row dataset and see correct row serial numbers', async ({ page }) => {
+  test('can scroll through a 50,000-row dataset and see row serial numbers above 50,000', async ({ page }) => {
     await login(page);
 
     const grid = page.getByLabel('Patient records table').or(page.locator('[role="grid"]'));
     await expect(grid).toBeVisible();
 
-    // Scroll to the very bottom
-    await grid.evaluate((el) => {
-      el.scrollTop = el.scrollHeight;
-    });
-    await page.waitForTimeout(2_000);
-    await grid.evaluate((el) => {
-      el.scrollTop = el.scrollHeight;
-    });
-    await page.waitForTimeout(1_000);
+    // Repeatedly scroll to bottom to trigger all pagination fetches
+    for (let i = 0; i < 5; i++) {
+      await grid.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+      await page.waitForTimeout(1_500);
+    }
 
-    // The last visible row serial number should be ≥ 200 for a full dataset
+    // The last visible row serial number should reflect the full 50,000-row dataset
     const serialCells = page.locator('[aria-colindex="1"]');
     const lastSerial = await serialCells.last().textContent();
-    expect(Number(lastSerial?.trim())).toBeGreaterThanOrEqual(200);
+    expect(Number(lastSerial?.trim())).toBeGreaterThanOrEqual(50_000);
   });
 });

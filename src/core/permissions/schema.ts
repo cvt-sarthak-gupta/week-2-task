@@ -9,16 +9,13 @@ export type Capability =
   | 'dismissAlerts'
   | 'managePresets'
   | 'sharePresets'
-  | 'viewAnalytics'
   | 'manageUsers'
   | 'viewAuditLog'
   | 'manageFeatureFlags';
 
 export type FeatureFlagKey =
-  | 'analyticsWidget'
   | 'exportFeature'
   | 'advancedFilters'
-  | 'offlineSupport'
   | 'presetSharing';
 
 export interface PermissionSchema {
@@ -42,10 +39,8 @@ export interface LayoutSchema {
 export const DEFAULT_PERMISSION_SCHEMA: PermissionSchema = {
   capabilities: ['viewPatients'],
   featureFlags: {
-    analyticsWidget: false,
     exportFeature: false,
     advancedFilters: false,
-    offlineSupport: false,
     presetSharing: false,
   },
   layout: {

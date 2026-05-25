@@ -8,7 +8,7 @@ import { setupWebSocket } from './ws';
 import { createSseRouter } from './sse';
 import { createAuthRouter } from './modules/auth/auth.routes';
 import { createPatientRouter } from './modules/patients/patient.routes';
-import { createPermissionsRouter } from './modules/permissions/permissions.routes';
+import { createPermissionsRouter } from './modules/permissions/permission.routes';
 import { createPresetsRouter } from './modules/presets/preset.routes';
 import { InMemoryStore } from './infrastructure/inMemoryStore';
 import type { PatientEntity } from './modules/patients/patient.entity';
@@ -74,11 +74,11 @@ const vitalsInterval = setInterval(() => {
       if (!patient) continue;
       const critical = patient.status === 'critical';
       combinedBroadcaster.broadcast({
-        id: `vitals-${now}-${tenantId}-${idx}`,
+        id: crypto.randomUUID(),
         type: 'vitals_updated',
         entityId,
         tenantId,
-        version: 0,
+        version: patient.version,
         ts: now,
         payload: {
           heartRate: critical ? (40 + Math.floor(Math.random() * 80)) : (58 + Math.floor(Math.random() * 44)),

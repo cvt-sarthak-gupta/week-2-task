@@ -44,7 +44,7 @@ export class ConnectionManager {
   disconnect(): void {
     this.stopHeartbeat();
     this.reconnect.reset();
-    this.cleanups.forEach((fn) => fn());
+    this.cleanups.forEach((fn) => { try { fn(); } catch (e) { console.error('[connectionManager] cleanup error:', e); } });
     this.cleanups = [];
     this.transport.close();
     if (this.usingSse) {
@@ -91,7 +91,7 @@ export class ConnectionManager {
         const fresh = getAccessToken();
         if (fresh) this.token = fresh;
         if (this.usingSse) {
-          this.cleanups.forEach((fn) => fn());
+          this.cleanups.forEach((fn) => { try { fn(); } catch (e) { console.error('[connectionManager] cleanup error:', e); } });
           this.cleanups = [];
           this.transport.close();
           this.transport = new WebSocketTransport();
@@ -104,7 +104,7 @@ export class ConnectionManager {
   }
 
   private switchToSse(): void {
-    this.cleanups.forEach((fn) => fn());
+    this.cleanups.forEach((fn) => { try { fn(); } catch (e) { console.error('[connectionManager] cleanup error:', e); } });
     this.cleanups = [];
     this.transport.close();
     this.transport = new SseTransport();

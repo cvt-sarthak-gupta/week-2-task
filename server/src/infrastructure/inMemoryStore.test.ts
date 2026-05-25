@@ -37,11 +37,14 @@ describe('InMemoryStore', () => {
       expect(store.get(T, '1')).toEqual(updated);
     });
 
-    it('invalidates the sorted cache on set', () => {
+    it('reflects the new entity in the sorted cache after set', () => {
       store.setMany(T, [make('1'), make('2')]);
       expect(store.getUpdatedAtDesc(T)).not.toBeNull();
       store.set(T, make('3'));
-      expect(store.getUpdatedAtDesc(T)).toBeNull();
+      const cache = store.getUpdatedAtDesc(T);
+      expect(cache).not.toBeNull();
+      expect(cache?.map((e) => e.id)).toContain('3');
+      expect(cache).toHaveLength(3);
     });
   });
 
@@ -81,10 +84,13 @@ describe('InMemoryStore', () => {
       expect(store.delete(T, 'ghost')).toBe(false);
     });
 
-    it('invalidates the sorted cache', () => {
+    it('reflects the deletion in the sorted cache', () => {
       store.setMany(T, [make('1'), make('2')]);
       store.delete(T, '1');
-      expect(store.getUpdatedAtDesc(T)).toBeNull();
+      const cache = store.getUpdatedAtDesc(T);
+      expect(cache).not.toBeNull();
+      expect(cache).toHaveLength(1);
+      expect(cache?.[0]?.id).toBe('2');
     });
   });
 
