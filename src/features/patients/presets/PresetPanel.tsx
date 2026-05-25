@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Button, Dropdown, Input, Modal, Space, Switch, Tooltip, Typography, Tag, Divider, Alert } from 'antd';
 import {
   BookOutlined,
@@ -39,7 +39,7 @@ interface UpdateFilterConfirmProps {
   onCancel: () => void;
 }
 
-function UpdateFilterConfirm({ preset, newFilterAst, onConfirm, onCancel }: UpdateFilterConfirmProps) {
+const UpdateFilterConfirm = memo(function UpdateFilterConfirm({ preset, newFilterAst, onConfirm, onCancel }: UpdateFilterConfirmProps) {
   if (!preset || !newFilterAst) return null;
   return (
     <Modal
@@ -81,7 +81,7 @@ function UpdateFilterConfirm({ preset, newFilterAst, onConfirm, onCancel }: Upda
       </Space>
     </Modal>
   );
-}
+});
 
 interface SaveModalProps {
   open: boolean;
@@ -90,7 +90,7 @@ interface SaveModalProps {
   onCancel: () => void;
 }
 
-function SaveModal({ open, canShare, onOk, onCancel }: SaveModalProps) {
+const SaveModal = memo(function SaveModal({ open, canShare, onOk, onCancel }: SaveModalProps) {
   const [name, setName] = useState('');
   const [isShared, setIsShared] = useState(false);
 
@@ -145,7 +145,7 @@ function SaveModal({ open, canShare, onOk, onCancel }: SaveModalProps) {
       </Space>
     </Modal>
   );
-}
+});
 
 interface EditModalState {
   preset: FilterPreset;

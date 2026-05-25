@@ -120,14 +120,15 @@ export function useUpdatePatientStatus(tenantId: string) {
     },
 
     onMutate: async ({ patientId, status }) => {
-      await qc.cancelQueries({ queryKey: queryKeys.patients.all(tenantId) });
+      const allPatientsKey = queryKeys.patients.all(tenantId);
+      await qc.cancelQueries({ queryKey: allPatientsKey });
 
       const snapshots = qc.getQueriesData<InfiniteData<PaginatedResult<Patient>>>({
-        queryKey: queryKeys.patients.all(tenantId),
+        queryKey: allPatientsKey,
       });
 
       qc.setQueriesData<InfiniteData<PaginatedResult<Patient>>>(
-        { queryKey: queryKeys.patients.all(tenantId) },
+        { queryKey: allPatientsKey },
         (old) => {
           if (!old) return old;
           return {
@@ -142,7 +143,7 @@ export function useUpdatePatientStatus(tenantId: string) {
 
       void getOfflineRepos().then(({ patientRepo }) => {
         const allCached = qc.getQueriesData<InfiniteData<PaginatedResult<Patient>>>({
-          queryKey: queryKeys.patients.all(tenantId),
+          queryKey: allPatientsKey,
         });
         outer: for (const [, infiniteData] of allCached) {
           if (!infiniteData) continue;

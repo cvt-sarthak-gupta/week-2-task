@@ -39,8 +39,8 @@ export const Row = memo(function Row({
     [columns],
   );
 
-  const frozenCols = columns.filter((c) => c.frozen);
-  const scrollCols = columns.filter((c) => !c.frozen);
+  const frozenCols = useMemo(() => columns.filter((c) => c.frozen), [columns]);
+  const scrollCols = useMemo(() => columns.filter((c) => !c.frozen), [columns]);
 
   const rowBg = isSelected ? 'var(--ant-color-primary-bg)' : index % 2 === 0 ? '#fff' : '#fafafa';
 
@@ -130,7 +130,7 @@ const STATUS_CONFIG = {
   admitted:   { icon: '🔵', label: 'Admitted',   color: '#1677ff' },
 } as const;
 
-function StatusBadge({ status }: { status: Patient['status'] }) {
+const StatusBadge = memo(function StatusBadge({ status }: { status: Patient['status'] }) {
   const config = STATUS_CONFIG[status];
   return (
     <span style={{ color: config.color, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -138,4 +138,4 @@ function StatusBadge({ status }: { status: Patient['status'] }) {
       <span>{config.label}</span>
     </span>
   );
-}
+});

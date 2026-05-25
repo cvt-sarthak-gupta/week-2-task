@@ -5,6 +5,7 @@ export type WorkerRequest =
   | { type: 'init'; tenantId: string }
   | { type: 'raw_event'; payload: DataEvent }
   | { type: 'set_dataset'; patients: readonly Patient[] }
+  | { type: 'update_patients'; updates: readonly Patient[] }
   | { type: 'filter'; ast: unknown; requestId: string };
 
 export type WorkerResponse =

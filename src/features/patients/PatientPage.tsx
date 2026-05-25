@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getOfflineRepos } from '@/core/offline/db/repos';
 import { apiFetch } from '@/core/api/client';
 import { Button, Layout, Space, Spin, Typography, Alert, Badge } from 'antd';
@@ -30,6 +30,7 @@ import { useCan } from '@/core/permissions/useCan';
 import type { FilterNode } from '@/features/filters/ast/types';
 import { deserialize as deserializeFilter } from '@/features/filters/ast/serialize';
 import { usePatientBootstrap } from '@/core/offline/sync/usePatientBootstrap';
+import { ErrorBoundary } from '@/shared/ErrorBoundary';
 
 const COLUMNS: readonly ColumnDef[] = [
   { field: '__sno', label: '#', defaultWidth: 56, frozen: true },
@@ -83,9 +84,16 @@ export default function PatientPage() {
     return connectionManager.onStatusChange(setConnStatus);
   }, []);
 
+  const tickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return streamWorkerClient.onBatch((updates) => {
-      if (updates.length > 0) setUpdateTick((t) => t + updates.length);
+      if (updates.length > 0) {
+        if (tickTimerRef.current !== null) clearTimeout(tickTimerRef.current);
+        tickTimerRef.current = setTimeout(() => {
+          setUpdateTick((t) => t + 1);
+          tickTimerRef.current = null;
+        }, 50);
+      }
     });
   }, []);
 
@@ -176,6 +184,7 @@ export default function PatientPage() {
   const currentFilterAst = parsedFilterAst;
 
   return (
+    <ErrorBoundary>
     <Layout style={{ height: '100vh' }}>
       <Layout.Header style={{ background: '#fff', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f0f0f0' }}>
         <Typography.Title level={4} style={{ margin: 0 }}>
@@ -313,5 +322,6 @@ export default function PatientPage() {
         />
       )}
     </Layout>
+    </ErrorBoundary>
   );
 }

@@ -23,6 +23,7 @@ export class PatientController extends BaseController {
       }
 
       const result = await this.service.findAll(page, limit, filters);
+      res.setHeader('Cache-Control', 'private, max-age=30');
       res.status(200).json(result);
     } catch (e) { this.handleError(e, res); }
   }

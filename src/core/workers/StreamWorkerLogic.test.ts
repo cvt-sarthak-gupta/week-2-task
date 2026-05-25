@@ -46,11 +46,11 @@ describe('StreamWorkerLogic — deduplication', () => {
     expect(logic.addToDedup('evt-1')).toBe(false);
   });
 
-  it('evicts oldest entry when cache exceeds 2000', () => {
-    for (let i = 0; i < 2001; i++) logic.addToDedup(`evt-${i}`);
-    // After 2001 inserts: cache holds evt-1..evt-2000 (evt-0 was evicted)
+  it('evicts oldest entry when cache exceeds 10000', () => {
+    for (let i = 0; i < 10_001; i++) logic.addToDedup(`evt-${i}`);
+    // After 10001 inserts: cache holds evt-1..evt-10000 (evt-0 was evicted)
     // A middle entry is still present → rejected
-    expect(logic.addToDedup('evt-500')).toBe(false);
+    expect(logic.addToDedup('evt-5000')).toBe(false);
     // evt-0 was evicted → accepted again
     expect(logic.addToDedup('evt-0')).toBe(true);
   });
@@ -130,24 +130,32 @@ describe('StreamWorkerLogic — batch building', () => {
     expect(update.patch.o2sat).toBe(98);
   });
 
-  it('accepts multiple vitals_updated events with strictly increasing timestamps', () => {
+  it('accepts multiple vitals_updated events with strictly increasing versions', () => {
     const base = Date.now();
-    logic.processEvent({ type: 'vitals_updated', id: 'v1', entityId: 'p-1', version: 0, ts: base,     payload: { heartRate: 72, bp: '120/80', temp: 36.6, o2sat: 98 } });
-    logic.processEvent({ type: 'vitals_updated', id: 'v2', entityId: 'p-1', version: 0, ts: base + 1, payload: { heartRate: 75, bp: '122/82', temp: 36.7, o2sat: 97 } });
-    logic.processEvent({ type: 'vitals_updated', id: 'v3', entityId: 'p-1', version: 0, ts: base + 2, payload: { heartRate: 78, bp: '118/78', temp: 36.5, o2sat: 99 } });
+    logic.processEvent({ type: 'vitals_updated', id: 'v1', entityId: 'p-1', version: 1, ts: base,     payload: { heartRate: 72, bp: '120/80', temp: 36.6, o2sat: 98 } });
+    logic.processEvent({ type: 'vitals_updated', id: 'v2', entityId: 'p-1', version: 2, ts: base + 1, payload: { heartRate: 75, bp: '122/82', temp: 36.7, o2sat: 97 } });
+    logic.processEvent({ type: 'vitals_updated', id: 'v3', entityId: 'p-1', version: 3, ts: base + 2, payload: { heartRate: 78, bp: '118/78', temp: 36.5, o2sat: 99 } });
     expect(logic.flushBatch()).toHaveLength(3);
   });
 
-  it('drops vitals_updated events with stale or equal timestamps', () => {
+  it('drops vitals_updated events with stale or equal versions', () => {
     const base = Date.now();
-    logic.processEvent({ type: 'vitals_updated', id: 'v1', entityId: 'p-1', version: 0, ts: base + 10, payload: { heartRate: 90, bp: '130/85', temp: 37, o2sat: 96 } });
-    // equal ts — rejected
-    logic.processEvent({ type: 'vitals_updated', id: 'v2', entityId: 'p-1', version: 0, ts: base + 10, payload: { heartRate: 80, bp: '120/80', temp: 36.5, o2sat: 98 } });
-    // older ts — rejected
-    logic.processEvent({ type: 'vitals_updated', id: 'v3', entityId: 'p-1', version: 0, ts: base + 5,  payload: { heartRate: 70, bp: '110/70', temp: 36.2, o2sat: 99 } });
+    logic.processEvent({ type: 'vitals_updated', id: 'v1', entityId: 'p-1', version: 5, ts: base + 10, payload: { heartRate: 90, bp: '130/85', temp: 37, o2sat: 96 } });
+    // equal version — rejected
+    logic.processEvent({ type: 'vitals_updated', id: 'v2', entityId: 'p-1', version: 5, ts: base + 10, payload: { heartRate: 80, bp: '120/80', temp: 36.5, o2sat: 98 } });
+    // older version — rejected even with newer timestamp
+    logic.processEvent({ type: 'vitals_updated', id: 'v3', entityId: 'p-1', version: 4, ts: base + 20, payload: { heartRate: 70, bp: '110/70', temp: 36.2, o2sat: 99 } });
     const batch = logic.flushBatch();
     expect(batch).toHaveLength(1);
     expect(batch[0]!.patch.heartRate).toBe(90);
+  });
+
+  it('drops vitals_updated with version behind a prior status_changed for same entity', () => {
+    logic.processEvent(makeStatusEvent({ id: 'e1', entityId: 'p-1', version: 10 }));
+    logic.flushBatch();
+    // vitals version 8 is behind entity version 10 → rejected
+    logic.processEvent({ type: 'vitals_updated', id: 'v1', entityId: 'p-1', version: 8, ts: Date.now(), payload: { heartRate: 60, bp: '100/70', temp: 36, o2sat: 95 } });
+    expect(logic.flushBatch()).toHaveLength(0);
   });
 
   it('order_changed does NOT produce a patient patch', () => {

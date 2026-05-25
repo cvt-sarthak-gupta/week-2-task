@@ -39,7 +39,15 @@ export class PatientRepository {
   }
 
   upsertMany(tenantId: string, patients: readonly Patient[]): void {
-    for (const p of patients) this.upsert(tenantId, p);
+    if (patients.length === 0) return;
+    this.db.exec('BEGIN');
+    try {
+      for (const p of patients) this.upsert(tenantId, p);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
   }
 
   findById(tenantId: string, id: string): Patient | null {

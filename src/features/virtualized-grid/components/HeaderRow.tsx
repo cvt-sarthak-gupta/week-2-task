@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { CaretUpOutlined, CaretDownOutlined } from '@ant-design/icons';
 import type { ColumnDef } from '../core/columnState';
 import type { SortState } from '../core/sortState';
@@ -14,6 +14,11 @@ interface HeaderRowProps {
 
 export function HeaderRow({ columns, widths, sortState, onSort, onResize }: HeaderRowProps) {
   const resizingRef = useRef<{ field: string; startX: number; startWidth: number } | null>(null);
+  const cleanupDragRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => { cleanupDragRef.current?.(); };
+  }, []);
 
   const handleMouseDown = useCallback(
     (field: string, e: React.MouseEvent) => {
@@ -30,6 +35,12 @@ export function HeaderRow({ columns, widths, sortState, onSort, onResize }: Head
 
       const onUp = () => {
         resizingRef.current = null;
+        cleanupDragRef.current = null;
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      };
+
+      cleanupDragRef.current = () => {
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
       };
@@ -40,8 +51,8 @@ export function HeaderRow({ columns, widths, sortState, onSort, onResize }: Head
     [widths, onResize],
   );
 
-  const frozenCols = columns.filter((c) => c.frozen);
-  const scrollCols = columns.filter((c) => !c.frozen);
+  const frozenCols = useMemo(() => columns.filter((c) => c.frozen), [columns]);
+  const scrollCols = useMemo(() => columns.filter((c) => !c.frozen), [columns]);
 
   const renderHeader = (col: ColumnDef) => {
     const priority = getSortPriority(sortState, col.field);

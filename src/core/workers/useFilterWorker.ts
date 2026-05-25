@@ -67,11 +67,26 @@ export function useFilterWorker(
     return () => { worker?.terminate(); workerRef.current = null; };
   }, []);
 
+  const sentVersionsRef = useRef<Map<string, number>>(new Map());
+
   useEffect(() => {
     const worker = workerRef.current;
     if (!worker) return;
-    const msg: WorkerRequest = { type: 'set_dataset', patients };
-    worker.postMessage(msg);
+    const sentVersions = sentVersionsRef.current;
+
+    if (sentVersions.size === 0 || patients.length < sentVersions.size) {
+      sentVersions.clear();
+      const msg: WorkerRequest = { type: 'set_dataset', patients };
+      worker.postMessage(msg);
+      for (const p of patients) sentVersions.set(p.id, p.version);
+    } else {
+      const changed = patients.filter((p) => (sentVersions.get(p.id) ?? -1) < p.version);
+      if (changed.length > 0) {
+        const msg: WorkerRequest = { type: 'update_patients', updates: changed };
+        worker.postMessage(msg);
+        for (const p of changed) sentVersions.set(p.id, p.version);
+      }
+    }
   }, [patients]);
 
   const runFilter = useCallback(() => {

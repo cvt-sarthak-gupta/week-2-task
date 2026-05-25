@@ -2,7 +2,7 @@ import type { DataEvent } from '../realtime/events.types';
 import type { Patient } from '@/shared/types';
 import type { PatientUpdate } from './protocol';
 
-const DEDUP_CACHE_SIZE = 2000;
+const DEDUP_CACHE_SIZE = 10_000;
 
 export class StreamWorkerLogic {
   private readonly dedupCache: string[] = [];
@@ -27,8 +27,9 @@ export class StreamWorkerLogic {
     if (!this.addToDedup(event.id)) return;
 
     if (event.type === 'vitals_updated') {
-      const lastTs = this.entityVitalTs.get(event.entityId) ?? -1;
-      if (event.ts <= lastTs) return;
+      const lastVersion = this.entityVersions.get(event.entityId) ?? -1;
+      if (event.version <= lastVersion) return;
+      this.entityVersions.set(event.entityId, event.version);
       this.entityVitalTs.set(event.entityId, event.ts);
       this.pendingBatch.push({
         id: event.entityId,

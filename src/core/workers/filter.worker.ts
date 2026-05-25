@@ -14,6 +14,15 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
       dataset = req.patients;
       break;
 
+    case 'update_patients': {
+      const updateMap = new Map(req.updates.map((p) => [p.id, p]));
+      const existingIds = new Set(dataset.map((p) => p.id));
+      const merged = dataset.map((p) => updateMap.get(p.id) ?? p);
+      const newPatients = req.updates.filter((p) => !existingIds.has(p.id));
+      dataset = newPatients.length > 0 ? [...merged, ...newPatients] : merged;
+      break;
+    }
+
     case 'filter': {
       const node = req.ast as FilterNode;
       const ids = dataset.filter((p) => evaluate(node, p)).map((p) => p.id);

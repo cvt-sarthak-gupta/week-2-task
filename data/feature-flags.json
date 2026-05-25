@@ -1,0 +1,22 @@
+{
+  "tenant-a": {
+    "exportFeature": true,
+    "advancedFilters": true,
+    "presetSharing": true
+  },
+  "tenant-b": {
+    "exportFeature": false,
+    "advancedFilters": true,
+    "presetSharing": true
+  },
+  "tenant-c": {
+    "exportFeature": true,
+    "advancedFilters": true,
+    "presetSharing": true
+  },
+  "tenant-test": {
+    "exportFeature": false,
+    "advancedFilters": false,
+    "presetSharing": false
+  }
+}
